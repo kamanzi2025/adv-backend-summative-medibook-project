@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Secrets: only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# Runtime output
+logs/
+coverage/
+npm-debug.log*
+
+# OS / editor noise
+.DS_Store
+Thumbs.db

@@ -1,0 +1,38 @@
+{
+  "name": "medibook",
+  "version": "1.0.0",
+  "description": "MediBook clinic appointment system backend (Express, MySQL, Redis)",
+  "main": "src/server.js",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "worker": "node src/workers/worker.js",
+    "worker:dev": "nodemon src/workers/worker.js",
+    "test": "jest",
+    "demo:same-slot": "node scripts/concurrency-same-slot.js",
+    "demo:daily-cap": "node scripts/concurrency-daily-cap.js",
+    "demo:concurrency": "npm run demo:same-slot && npm run demo:daily-cap"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "<rootDir>/tests/**/*.test.js"
+    ]
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "bullmq": "^5.81.5",
+    "dotenv": "^16.6.1",
+    "express": "^5.3.0",
+    "ioredis": "^5.11.1",
+    "mysql2": "^3.24.6"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.14"
+  }
+}

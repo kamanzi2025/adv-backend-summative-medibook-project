@@ -1,0 +1,26 @@
+# Redis 7 for MediBook (waitlist + BullMQ job queues).
+# MySQL is NOT in Docker: the app uses the native MySQL 8 Windows service (see README).
+# The port is bound to 127.0.0.1 so Redis is reachable from this PC only.
+name: medibook
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: medibook-redis
+    restart: unless-stopped
+    # Append-only file so the waitlist survives a Redis restart.
+    command: ["redis-server", "--appendonly", "yes"]
+    environment:
+      TZ: ${CLINIC_TIMEZONE:-Africa/Johannesburg}
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  redis-data:
