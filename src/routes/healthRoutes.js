@@ -1,8 +1,11 @@
 const { Router } = require('express');
 const healthController = require('../controllers/healthController');
+const methodNotAllowed = require('../middleware/methodNotAllowed');
 
 const router = Router();
 
-router.get('/', healthController.getHealth);
+router.route('/')
+  .get(healthController.getHealth)
+  .all(methodNotAllowed(['GET']));
 
 module.exports = router;

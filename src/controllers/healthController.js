@@ -1,4 +1,5 @@
 const healthModel = require('../models/healthModel');
+const { HTTP_STATUS } = require('../config/constants');
 
 /** GET /api/health: reports whether the API can reach MySQL. */
 async function getHealth(req, res) {
@@ -9,7 +10,7 @@ async function getHealth(req, res) {
     database = 'down';
   }
   const healthy = database === 'up';
-  res.status(healthy ? 200 : 503).json({ status: healthy ? 'ok' : 'degraded', database });
+  res.status(healthy ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE).json({ status: healthy ? 'ok' : 'degraded', database });
 }
 
 module.exports = { getHealth };
