@@ -1,0 +1,18 @@
+{
+  "lang": "fr",
+  "languageName": "Français",
+  "title": "Avis sur le cours",
+  "heading": "Questionnaire d'évaluation du cours",
+  "instructions": "Veuillez répondre aux cinq questions ci-dessous avec vos propres mots. Il n'y a pas de bonne ou de mauvaise réponse : soyez aussi précis que possible.",
+  "dateLabel": "Date du jour :",
+  "questions": [
+    "Quel thème de ce cours avez-vous trouvé le plus difficile, et pourquoi ?",
+    "Décrivez une notion que vous n'avez comprise qu'après les travaux pratiques. Qu'est-ce qui vous a permis de la comprendre ?",
+    "En quoi votre façon de concevoir des bases de données ou des API a-t-elle changé depuis le début du trimestre ?",
+    "Qu'amélioreriez-vous dans la manière dont ce cours a été enseigné ou évalué ?",
+    "Comment comptez-vous mettre en pratique ce que vous avez appris dans ce cours à l'avenir ?"
+  ],
+  "submit": "Envoyer mon avis",
+  "formNote": "Ceci est une page de démonstration : les réponses ne sont pas enregistrées.",
+  "languageSwitchLabel": "Langue"
+}
