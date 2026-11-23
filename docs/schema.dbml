@@ -1,5 +1,6 @@
 // MediBook schema (3NF, exactly 3 tables).
-// Paste into https://dbdiagram.io/d and export as schema-diagram.png (repo root).
+// Paste into https://dbdiagram.io/d to explore. The repo-root schema-diagram.png is rendered
+// from docs/schema-diagram.html (render command at the top of that file).
 // Source of truth: database/schema.sql. Names here match it exactly.
 
 Project medibook {
@@ -36,7 +37,89 @@ Table doctors {
 
 Table appointments {
   id             "INT UNSIGNED"               [pk, increment, not null, note: 'pk_appointments (AUTO_INCREMENT)']
-  appt_ref       "VARCHAR(16)"                [not null, note: '''uq_appt_ref (UNIQUE); chk_appt_ref_format: REGEXP_LIKE(appt_ref, '^AP-[0-9]{8}-[0-9A-Z]{4}$', 'c'), e.g. AP-20270315-K7Q2''']
+  appt_ref       "VARCHAR(16)"                [not null, note: '''uq_appt_ref (UNIQUE); chk_appt_ref_format: REGEXP_LIKE(appt_ref, '^AP-[0-9]{8}-[0-9A-Z]{4}
+  patient_id     "INT UNSIGNED"               [not null, note: 'FK fk_appt_patient -> patients.id (ON DELETE RESTRICT, ON UPDATE RESTRICT)']
+  doctor_id      "INT UNSIGNED"               [not null, note: 'FK fk_appt_doctor -> doctors.id (ON DELETE RESTRICT, ON UPDATE RESTRICT)']
+  appt_datetime  "DATETIME"                   [not null, note: 'Clinic wall-clock time. chk_appt_slot_minutes: MINUTE IN (0,30); chk_appt_slot_seconds: SECOND = 0; chk_appt_working_hours: TIME BETWEEN 09:00:00 AND 16:30:00']
+  amount_paid    "DECIMAL(10,2)"              [not null, note: 'chk_appt_amount_paid_non_negative: amount_paid >= 0. Can differ from the fee (discounts), so it is NOT redundant.']
+  status         "ENUM('BOOKED','CANCELLED')" [not null, default: 'BOOKED']
+  active_slot    "DATETIME"                   [null, note: '''STORED GENERATED: CASE WHEN status = 'BOOKED' THEN appt_datetime ELSE NULL END''']
+  booked_on      "DATETIME"                   [not null, note: 'chk_appt_booked_before_slot: booked_on < appt_datetime']
+  cancelled_at   "DATETIME"                   [null, note: 'chk_appt_cancelled_after_booked: cancelled_at >= booked_on']
+  refund_percent "TINYINT UNSIGNED"           [null, note: 'chk_appt_refund_percent_range: BETWEEN 0 AND 100']
+  refund_amount  "DECIMAL(10,2)"              [null, note: 'chk_appt_refund_within_paid: BETWEEN 0 AND amount_paid; chk_appt_refund_matches_percent: = ROUND(amount_paid * refund_percent / 100, 2). A deliberate financial snapshot of the money returned; the CHECK makes it impossible to disagree with refund_percent.']
+
+  indexes {
+    appt_ref [unique, name: 'uq_appt_ref']
+    (doctor_id, active_slot) [unique, name: 'uq_appt_doctor_active_slot', note: 'A doctor can never have two ACTIVE (BOOKED) appointments at the same date/time']
+    (patient_id, active_slot) [unique, name: 'uq_appt_patient_active_slot', note: 'A patient can never hold two ACTIVE appointments at the same date/time']
+    (doctor_id, appt_datetime) [name: 'idx_appt_doctor_datetime']
+  }
+
+  Note: 'chk_appt_status_consistency: BOOKED => cancelled_at, refund_percent, refund_amount all NULL; CANCELLED => all three NOT NULL.'
+}
+
+// Named relationships. ">" = many-to-one:
+// patients 1 --- N appointments, doctors 1 --- N appointments.
+Ref fk_appt_patient: appointments.patient_id > patients.id [delete: restrict, update: restrict]
+Ref fk_appt_doctor: appointments.doctor_id > doctors.id [delete: restrict, update: restrict]
+
+Note slot_uniqueness_rule {
+'''
+RULE: a doctor cannot have two active appointments at the same date/time
+
+appointments.active_slot  DATETIME  GENERATED ALWAYS AS
+  (CASE WHEN status = 'BOOKED' THEN appt_datetime ELSE NULL END) STORED
+
+UNIQUE uq_appt_doctor_active_slot  (doctor_id, active_slot)
+UNIQUE uq_appt_patient_active_slot (patient_id, active_slot)
+
+BOOKED row     -> active_slot = appt_datetime -> duplicates REJECTED (ERROR 1062)
+CANCELLED row  -> active_slot = NULL          -> NULLs never collide, so the
+                  cancelled record is KEPT and the slot is free to book again
+'''
+}
+
+Note appointments_checks {
+'''
+appointments CHECK constraints
+- chk_appt_slot_minutes             MINUTE(appt_datetime) IN (0, 30)
+- chk_appt_slot_seconds             SECOND(appt_datetime) = 0
+- chk_appt_working_hours            TIME(appt_datetime) BETWEEN '09:00:00' AND '16:30:00'
+- chk_appt_ref_format               appt_ref matches ^AP-[0-9]{8}-[0-9A-Z]{4}$
+- chk_appt_amount_paid_non_negative amount_paid >= 0
+- chk_appt_refund_percent_range     refund_percent BETWEEN 0 AND 100
+- chk_appt_refund_within_paid       refund_amount BETWEEN 0 AND amount_paid
+- chk_appt_refund_matches_percent   refund_amount = ROUND(amount_paid * refund_percent / 100, 2)
+- chk_appt_status_consistency       BOOKED: cancelled_at/refund_* NULL; CANCELLED: all NOT NULL
+- chk_appt_booked_before_slot       booked_on < appt_datetime
+- chk_appt_cancelled_after_booked   cancelled_at >= booked_on
+UNIQUE uq_appt_ref (appt_ref)  |  INDEX idx_appt_doctor_datetime (doctor_id, appt_datetime)
+FK fk_appt_patient -> patients.id, fk_appt_doctor -> doctors.id (ON DELETE/UPDATE RESTRICT)
+All columns NOT NULL except active_slot, cancelled_at, refund_percent, refund_amount
+'''
+}
+
+Note patients_doctors_checks {
+'''
+patients
+- UNIQUE uq_patient_email (email)
+- chk_patient_name_not_blank   CHAR_LENGTH(TRIM(full_name)) > 0
+- chk_patient_email_format     email LIKE '%_@_%._%'
+- chk_patient_phone_format     REGEXP_LIKE(phone, '^[+]?[0-9][0-9 ()-]{5,18}[0-9]$')
+
+doctors
+- UNIQUE uq_doctor_room (room)
+- chk_doctor_name_not_blank       CHAR_LENGTH(TRIM(full_name)) > 0
+- chk_doctor_specialty_not_blank  CHAR_LENGTH(TRIM(specialty)) > 0
+- chk_doctor_room_not_blank       CHAR_LENGTH(TRIM(room)) > 0
+- chk_doctor_fee_positive         consultation_fee > 0
+
+All patients/doctors columns are NOT NULL.
+Cardinality: patients 1 --< N appointments; doctors 1 --< N appointments.
+'''
+}
+, 'c'), e.g. AP-20270315-K7Q2. The date part is only a printed label; appt_datetime is the authoritative slot.''']
   patient_id     "INT UNSIGNED"               [not null, note: 'FK fk_appt_patient -> patients.id (ON DELETE RESTRICT, ON UPDATE RESTRICT)']
   doctor_id      "INT UNSIGNED"               [not null, note: 'FK fk_appt_doctor -> doctors.id (ON DELETE RESTRICT, ON UPDATE RESTRICT)']
   appt_datetime  "DATETIME"                   [not null, note: 'Clinic wall-clock time. chk_appt_slot_minutes: MINUTE IN (0,30); chk_appt_slot_seconds: SECOND = 0; chk_appt_working_hours: TIME BETWEEN 09:00:00 AND 16:30:00']

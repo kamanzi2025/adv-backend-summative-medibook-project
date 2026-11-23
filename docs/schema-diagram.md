@@ -2,8 +2,8 @@
 
 Equivalent to [`schema.dbml`](schema.dbml) and [`../database/schema.sql`](../database/schema.sql):
 same 3 tables, columns, types and constraint names. GitHub and VS Code
-(with a Mermaid extension) render this directly. To export an image, paste the
-code block into <https://mermaid.live> and use **Actions → PNG**.
+(with a Mermaid extension) render this directly. The repo-root `schema-diagram.png` is rendered
+from [`schema-diagram.html`](schema-diagram.html) (render command at the top of that file).
 
 > Mermaid type names can't contain spaces or commas, so the diagram writes
 > `INT_UNSIGNED` for `INT UNSIGNED`, `TINYINT_UNSIGNED` for `TINYINT UNSIGNED`,
@@ -60,6 +60,14 @@ UNIQUE uq_appt_patient_active_slot (patient_id, active_slot)
 |---|---|---|
 | `BOOKED` | = `appt_datetime` | A second BOOKED row for the same doctor + time is **rejected** (ERROR 1062) |
 | `CANCELLED` | `NULL` | NULLs never collide, so the cancelled record is **kept** and the slot can be **booked again** |
+
+## Two deliberate design notes (3NF)
+
+- **`refund_amount`** could be calculated as `amount_paid × refund_percent / 100`. It is stored on purpose as a
+  financial snapshot of the money actually returned, written in the same UPDATE as `refund_percent`, and
+  `chk_appt_refund_matches_percent` makes it impossible for the two to disagree, so it can never be inconsistent.
+- **`appt_ref`** contains the appointment date (`AP-YYYYMMDD-XXXX`) only as part of a printed label.
+  `appt_datetime` is the authoritative slot; `appt_ref` is a UNIQUE candidate key that no logic depends on.
 
 ## Every constraint
 

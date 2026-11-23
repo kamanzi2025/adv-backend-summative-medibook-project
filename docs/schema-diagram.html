@@ -1,0 +1,185 @@
+<!doctype html>
+<!--
+  Source of ../schema-diagram.png. Must match database/schema.sql exactly
+  (same tables, columns, types and constraint names). Re-render from the project root:
+    & "C:\Program Files\Google\Chrome\Application\chrome.exe" --headless=new --disable-gpu --hide-scrollbars `
+      --force-device-scale-factor=2 --window-size=2300,900 `
+      --screenshot="$PWD\schema-diagram.png" "file:///$PWD/docs/schema-diagram.html"
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MediBook schema diagram</title>
+<style>
+  :root {
+    --ink: #1b1f24; --muted: #4a5563; --line: #3b4656; --grid: #c9d1db;
+    --patients: #1f3a8a; --doctors: #0b6146; --appts: #7c2d12; --head: #e6ebf1;
+    --gen: #fdf3c7; --rule-bg: #fffaeb; --rule: #b45309; --note-bg: #f6f8fa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; width: 2300px; background: #fff; color: var(--ink);
+    font: 15px/1.35 "Segoe UI", "DejaVu Sans", Arial, sans-serif; position: relative;
+  }
+  h1 { margin: 22px 0 2px; text-align: center; font-size: 30px; letter-spacing: .2px; }
+  .legend { text-align: center; color: var(--muted); font-size: 15px; }
+  .layout { display: flex; align-items: flex-start; gap: 0; padding: 26px 40px 40px; }
+  .col { display: flex; flex-direction: column; gap: 46px; }
+  .col.left { width: 640px; } .col.mid { width: 900px; margin-left: 120px; } .col.right { width: 520px; margin-left: 40px; }
+  .table { width: 100%; border: 2px solid var(--line); background: #fff; border-collapse: collapse; }
+  .table caption {
+    caption-side: top; color: #fff; font-weight: 700; font-size: 17px; padding: 7px 0;
+    border: 2px solid var(--line); border-bottom: none;
+  }
+  .table th { background: var(--head); font-weight: 700; padding: 6px 10px; border: 1px solid var(--grid); text-align: left; }
+  .table td { padding: 5px 10px; border: 1px solid var(--grid); vertical-align: top; }
+  .table td:nth-child(1), .table td:nth-child(2) { white-space: nowrap; }
+  .table td:first-child { font-weight: 600; }
+  .pk td:first-child { text-decoration: underline; }
+  .fk td:first-child { color: var(--appts); }
+  .gen td { background: var(--gen); }
+  .tl td { background: var(--gen); font-weight: 400 !important; white-space: normal; }
+  .tl td b { font-weight: 700; }
+  .k { display: inline-block; min-width: 26px; padding: 0 5px; margin-right: 6px; border-radius: 4px;
+       font-size: 12px; font-weight: 700; text-align: center; color: #fff; background: #556070; }
+  .k.pk { background: #8a6d00; } .k.fk { background: var(--appts); } .k.uq { background: #1f6feb; }
+  .k.ck { background: #6b4fbb; } .k.ix { background: #556070; }
+  #patients caption { background: var(--patients); }
+  #doctors caption { background: var(--doctors); }
+  #appointments caption { background: var(--appts); }
+  .box { border: 2px solid var(--line); background: var(--note-bg); padding: 12px 16px; }
+  .box h2 { margin: 0 0 8px; font-size: 16px; }
+  .box p, .box li { margin: 0 0 6px; }
+  .box ul { margin: 0; padding-left: 18px; }
+  .rule { border-color: var(--rule); background: var(--rule-bg); }
+  code { font-family: Consolas, "DejaVu Sans Mono", monospace; font-size: 14px; }
+  svg { position: absolute; left: 0; top: 0; pointer-events: none; }
+  .card { font: 700 17px "Segoe UI", Arial, sans-serif; fill: var(--ink); }
+</style>
+</head>
+<body>
+<h1>MediBook — Database Schema (3NF, MySQL 8 / InnoDB)</h1>
+<div class="legend">
+  <span class="k pk">PK</span>primary key &nbsp; <span class="k fk">FK</span>foreign key &nbsp;
+  <span class="k uq">UQ</span>unique &nbsp; <span class="k ck">CK</span>check &nbsp;
+  NN = NOT NULL &nbsp; N = nullable &nbsp; GEN = stored generated column &nbsp; † ‡ = see notes
+</div>
+
+<div class="layout">
+<div class="col left">
+<table class="table" id="patients">
+  <caption>patients</caption>
+  <tr><th>column</th><th>type</th><th>keys / constraints</th></tr>
+  <tr class="pk" id="p-id"><td>id</td><td>INT UNSIGNED</td><td><span class="k pk">PK</span>pk_patients, NN, AUTO_INCREMENT</td></tr>
+  <tr><td>full_name</td><td>VARCHAR(100)</td><td>NN, <span class="k ck">CK</span>chk_patient_name_not_blank</td></tr>
+  <tr><td>email</td><td>VARCHAR(254)</td><td>NN, <span class="k uq">UQ</span>uq_patient_email, <span class="k ck">CK</span>chk_patient_email_format</td></tr>
+  <tr><td>phone</td><td>VARCHAR(20)</td><td>NN, <span class="k ck">CK</span>chk_patient_phone_format</td></tr>
+</table>
+
+<table class="table" id="doctors">
+  <caption>doctors</caption>
+  <tr><th>column</th><th>type</th><th>keys / constraints</th></tr>
+  <tr class="pk" id="d-id"><td>id</td><td>INT UNSIGNED</td><td><span class="k pk">PK</span>pk_doctors, NN, AUTO_INCREMENT</td></tr>
+  <tr><td>full_name</td><td>VARCHAR(100)</td><td>NN, <span class="k ck">CK</span>chk_doctor_name_not_blank</td></tr>
+  <tr><td>specialty</td><td>VARCHAR(80)</td><td>NN, <span class="k ck">CK</span>chk_doctor_specialty_not_blank</td></tr>
+  <tr><td>consultation_fee</td><td>DECIMAL(10,2)</td><td>NN, <span class="k ck">CK</span>chk_doctor_fee_positive (&gt; 0)</td></tr>
+  <tr><td>room</td><td>VARCHAR(10)</td><td>NN, <span class="k uq">UQ</span>uq_doctor_room, <span class="k ck">CK</span>chk_doctor_room_not_blank</td></tr>
+</table>
+
+<div class="box">
+  <h2>Relationships (cardinality)</h2>
+  <p>patients <b>1</b> ──&lt; <b>N</b> appointments (fk_appt_patient): a patient has 0..N appointments;
+    every appointment has exactly 1 patient.</p>
+  <p>doctors <b>1</b> ──&lt; <b>N</b> appointments (fk_appt_doctor): a doctor has 0..N appointments;
+    every appointment has exactly 1 doctor.</p>
+  <p>Exactly 3 tables. All columns NOT NULL except active_slot, cancelled_at, refund_percent, refund_amount.</p>
+</div>
+</div>
+
+
+<div class="col mid">
+<table class="table" id="appointments">
+  <caption>appointments</caption>
+  <tr><th>column</th><th>type</th><th>keys / constraints</th></tr>
+  <tr class="pk"><td>id</td><td>INT UNSIGNED</td><td><span class="k pk">PK</span>pk_appointments, NN, AUTO_INCREMENT</td></tr>
+  <tr><td>appt_ref ‡</td><td>VARCHAR(16)</td><td>NN, <span class="k uq">UQ</span>uq_appt_ref, <span class="k ck">CK</span>chk_appt_ref_format <code>AP-YYYYMMDD-XXXX</code></td></tr>
+  <tr class="fk" id="a-patient"><td>patient_id</td><td>INT UNSIGNED</td><td>NN, <span class="k fk">FK</span>fk_appt_patient → patients.id</td></tr>
+  <tr class="fk" id="a-doctor"><td>doctor_id</td><td>INT UNSIGNED</td><td>NN, <span class="k fk">FK</span>fk_appt_doctor → doctors.id</td></tr>
+  <tr><td>appt_datetime</td><td>DATETIME</td><td>NN, <span class="k ck">CK</span>chk_appt_slot_minutes (:00/:30), chk_appt_slot_seconds (= 0),<br>chk_appt_working_hours (09:00–16:30)</td></tr>
+  <tr><td>amount_paid</td><td>DECIMAL(10,2)</td><td>NN, <span class="k ck">CK</span>chk_appt_amount_paid_non_negative (&gt;= 0)</td></tr>
+  <tr><td>status</td><td>ENUM('BOOKED','CANCELLED')</td><td>NN, DEFAULT 'BOOKED'</td></tr>
+  <tr class="gen" id="a-slot"><td>active_slot</td><td>DATETIME</td><td>N, GEN STORED: <code>appt_datetime</code> if BOOKED, else NULL</td></tr>
+  <tr><td>booked_on</td><td>DATETIME</td><td>NN, <span class="k ck">CK</span>chk_appt_booked_before_slot (booked_on &lt; appt_datetime)</td></tr>
+  <tr><td>cancelled_at</td><td>DATETIME</td><td>N, <span class="k ck">CK</span>chk_appt_cancelled_after_booked (&gt;= booked_on)</td></tr>
+  <tr><td>refund_percent</td><td>TINYINT UNSIGNED</td><td>N, <span class="k ck">CK</span>chk_appt_refund_percent_range (0–100)</td></tr>
+  <tr><td>refund_amount †</td><td>DECIMAL(10,2)</td><td>N, <span class="k ck">CK</span>chk_appt_refund_within_paid (0–amount_paid),<br>chk_appt_refund_matches_percent (= ROUND(amount_paid × refund_percent / 100, 2))</td></tr>
+  <tr><th colspan="3">table-level constraints and index</th></tr>
+  <tr class="tl"><td colspan="3"><span class="k uq">UQ</span><b>uq_appt_doctor_active_slot</b> (doctor_id, active_slot) — a doctor never has two BOOKED appointments at one date/time</td></tr>
+  <tr class="tl"><td colspan="3"><span class="k uq">UQ</span><b>uq_appt_patient_active_slot</b> (patient_id, active_slot) — a patient is never in two places at once</td></tr>
+  <tr class="tl"><td colspan="3"><span class="k ck">CK</span><b>chk_appt_status_consistency</b>: BOOKED ⇒ cancelled_at, refund_percent, refund_amount all NULL;
+    CANCELLED ⇒ all three NOT NULL</td></tr>
+  <tr class="tl"><td colspan="3"><span class="k fk">FK</span><b>fk_appt_patient</b>, <b>fk_appt_doctor</b>: ON DELETE RESTRICT, ON UPDATE RESTRICT (refund history is never lost)</td></tr>
+  <tr class="tl"><td colspan="3"><span class="k ix">IX</span><b>idx_appt_doctor_datetime</b> (doctor_id, appt_datetime) — performance only, not a rule</td></tr>
+</table>
+</div>
+<div class="col right">
+
+<div class="box rule">
+  <h2>RULE: a doctor cannot have two appointments at the same date/time</h2>
+  <p><code>active_slot</code> = <code>appt_datetime</code> when status = 'BOOKED', NULL when 'CANCELLED'.</p>
+  <p><code>UNIQUE (doctor_id, active_slot)</code> → a 2nd BOOKED row for the same doctor and slot is rejected (ERROR 1062).</p>
+  <p>NULLs never collide → the cancelled record is kept and the slot can be booked again.</p>
+  <p>Same idea per patient: <code>UNIQUE (patient_id, active_slot)</code>.</p>
+</div>
+
+<div class="box">
+  <h2>Normalization notes (3NF)</h2>
+  <ul>
+    <li>Spreadsheet: appt_ref → doctor_name → specialty, fee, room (and → patient email → name, phone) are
+      transitive dependencies. They are removed by storing each doctor and patient once and keeping only
+      <code>doctor_id</code> / <code>patient_id</code> on the appointment.</li>
+    <li><code>amount_paid</code> is not the fee: it can be discounted (AP-002 paid 120.00 on a 150.00 fee),
+      so it depends on the appointment, not the doctor.</li>
+    <li>† <code>refund_amount</code> is a deliberate financial snapshot of the money returned, written in the
+      same UPDATE as <code>refund_percent</code>. <code>chk_appt_refund_matches_percent</code> makes it
+      impossible for the two to disagree, so storing it cannot cause an inconsistency.</li>
+    <li>‡ The date inside <code>appt_ref</code> is part of a printed label only; <code>appt_datetime</code> is the
+      authoritative slot. <code>appt_ref</code> is a UNIQUE candidate key, never used for logic.</li>
+  </ul>
+</div>
+
+</div>
+</div>
+
+<svg id="links" width="2300" height="900"></svg>
+<script>
+  // Draws the two 1:N relationships: a bar ("one") at the PK, a crow's foot ("many") at the FK.
+  const svg = document.getElementById('links');
+  const NS = 'http://www.w3.org/2000/svg';
+  function add(tag, attrs) {
+    const el = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    svg.appendChild(el);
+    return el;
+  }
+  function label(x, y, text) { add('text', { x, y, class: 'card' }).textContent = text; }
+  function link(fromRow, toRow, gapX) {
+    const a = document.getElementById(fromRow).getBoundingClientRect();
+    const b = document.getElementById(toRow).getBoundingClientRect();
+    const x1 = a.right, y1 = a.top + a.height / 2;
+    const x2 = b.left, y2 = b.top + b.height / 2;
+    const mid = x1 + gapX;
+    const style = { stroke: '#3b4656', 'stroke-width': 2.2, fill: 'none' };
+    add('path', { d: `M${x1},${y1} H${mid} V${y2} H${x2}`, ...style });
+    add('line', { x1: x1 + 10, y1: y1 - 9, x2: x1 + 10, y2: y1 + 9, ...style });          // "one" bar
+    add('line', { x1: x2 - 16, y1: y2, x2: x2, y2: y2 - 9, ...style });                   // crow's foot
+    add('line', { x1: x2 - 16, y1: y2, x2: x2, y2: y2 + 9, ...style });
+    add('line', { x1: x2 - 16, y1: y2 - 9, x2: x2 - 16, y2: y2 + 9, ...style });
+    label(x1 + 16, y1 - 8, '1');
+    label(x2 - 34, y2 - 12, 'N');
+  }
+  link('p-id', 'a-patient', 45);
+  link('d-id', 'a-doctor', 75);
+</script>
+</body>
+</html>
