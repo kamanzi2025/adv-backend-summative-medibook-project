@@ -1,0 +1,690 @@
+# MediBook API: manual test requests.
+# Open in VS Code with the "REST Client" extension (humao.rest-client) and click
+# "Send Request" above any request. Start the server first: npm start
+# Reload clean seed data afterwards (see README): some requests below delete rows.
+
+@baseUrl = http://localhost:3000
+@json = application/json
+
+############################################################
+# Health
+############################################################
+
+### Health check → 200 {"status":"ok","database":"up"}
+GET {{baseUrl}}/api/health
+
+############################################################
+# Patients
+############################################################
+
+### List patients (default limit 20) → 200 { data: [...], meta: { limit, offset, total } }
+GET {{baseUrl}}/api/patients
+
+### List with pagination → 200 (ids 2, 3)
+GET {{baseUrl}}/api/patients?limit=2&offset=1
+
+### Bad pagination → 400 (limit max 100, offset >= 0)
+GET {{baseUrl}}/api/patients?limit=500&offset=-1
+
+### Get one → 200
+GET {{baseUrl}}/api/patients/1
+
+### Non-numeric id → 400
+GET {{baseUrl}}/api/patients/abc
+
+### Zero is not a valid id → 400
+GET {{baseUrl}}/api/patients/0
+
+### Unknown id → 404
+GET {{baseUrl}}/api/patients/9999
+
+### Create with EVERY field invalid + an unknown field → 400 listing all four problems
+POST {{baseUrl}}/api/patients
+Content-Type: {{json}}
+
+{
+  "fullName": "   ",
+  "email": "not-an-email",
+  "phone": "12",
+  "age": 30
+}
+
+### Empty body → 400 (fullName, email, phone are required)
+POST {{baseUrl}}/api/patients
+Content-Type: {{json}}
+
+{}
+
+### Malformed JSON → 400 "Malformed JSON in request body"
+POST {{baseUrl}}/api/patients
+Content-Type: {{json}}
+
+{"fullName": "Broken",
+
+### Duplicate email (case-insensitive: ama@mail.com exists) → 409
+POST {{baseUrl}}/api/patients
+Content-Type: {{json}}
+
+{
+  "fullName": "Someone Else",
+  "email": "AMA@mail.com",
+  "phone": "0244-000-000"
+}
+
+### Create → 201 + Location header (values are trimmed, email lower-cased)
+# @name createPatient
+POST {{baseUrl}}/api/patients
+Content-Type: {{json}}
+
+{
+  "fullName": "  Nana Yeboah ",
+  "email": " Nana.Yeboah@Mail.com ",
+  "phone": "+233 24 123 4567"
+}
+
+### Partial update (PATCH) of the new patient: only the phone → 200
+PATCH {{baseUrl}}/api/patients/{{createPatient.response.body.data.id}}
+Content-Type: {{json}}
+
+{
+  "phone": "0200-999-888"
+}
+
+### PATCH with no fields → 400 (at least one field required)
+PATCH {{baseUrl}}/api/patients/{{createPatient.response.body.data.id}}
+Content-Type: {{json}}
+
+{}
+
+### PATCH to an email another patient already has → 409
+PATCH {{baseUrl}}/api/patients/{{createPatient.response.body.data.id}}
+Content-Type: {{json}}
+
+{
+  "email": "kojo@mail.com"
+}
+
+### PATCH unknown id → 404
+PATCH {{baseUrl}}/api/patients/9999
+Content-Type: {{json}}
+
+{
+  "phone": "0200-999-888"
+}
+
+### Delete the new patient (no appointments) → 204 No Content
+DELETE {{baseUrl}}/api/patients/{{createPatient.response.body.data.id}}
+
+### Get it again → 404
+GET {{baseUrl}}/api/patients/{{createPatient.response.body.data.id}}
+
+### Delete a patient WITH appointments → 409 (refund history is kept)
+DELETE {{baseUrl}}/api/patients/1
+
+### Wrong method on an existing URL → 405 + Allow: GET, PATCH, DELETE
+PUT {{baseUrl}}/api/patients/1
+Content-Type: {{json}}
+
+{
+  "fullName": "Ama Mensah"
+}
+
+############################################################
+# Doctors
+############################################################
+
+### List doctors → 200
+GET {{baseUrl}}/api/doctors
+
+### Get one → 200
+GET {{baseUrl}}/api/doctors/1
+
+### Decimal id → 400
+GET {{baseUrl}}/api/doctors/1.5
+
+### Unknown id → 404
+GET {{baseUrl}}/api/doctors/9999
+
+### Invalid body → 400 (blank specialty, 3-decimal fee, bad room format)
+POST {{baseUrl}}/api/doctors
+Content-Type: {{json}}
+
+{
+  "fullName": "Dr. Example",
+  "specialty": "",
+  "consultationFee": 12.345,
+  "room": "Room 5"
+}
+
+### Fee sent as a string → 400 (must be a JSON number)
+POST {{baseUrl}}/api/doctors
+Content-Type: {{json}}
+
+{
+  "fullName": "Dr. Example",
+  "specialty": "General Practice",
+  "consultationFee": "100",
+  "room": "R-50"
+}
+
+### Negative fee → 400
+POST {{baseUrl}}/api/doctors
+Content-Type: {{json}}
+
+{
+  "fullName": "Dr. Example",
+  "specialty": "General Practice",
+  "consultationFee": -5,
+  "room": "R-50"
+}
+
+### Room already used (r-12 is upper-cased to R-12, Dr. Boateng's room) → 409
+POST {{baseUrl}}/api/doctors
+Content-Type: {{json}}
+
+{
+  "fullName": "Dr. Example",
+  "specialty": "General Practice",
+  "consultationFee": 80,
+  "room": "r-12"
+}
+
+### Create → 201 + Location header
+# @name createDoctor
+POST {{baseUrl}}/api/doctors
+Content-Type: {{json}}
+
+{
+  "fullName": "Dr. Abena Mensah",
+  "specialty": "General Practice",
+  "consultationFee": 99.5,
+  "room": "R-21"
+}
+
+### Partial update: fee and specialty → 200
+PATCH {{baseUrl}}/api/doctors/{{createDoctor.response.body.data.id}}
+Content-Type: {{json}}
+
+{
+  "consultationFee": 120,
+  "specialty": "Family Medicine"
+}
+
+### Unknown field → 400
+PATCH {{baseUrl}}/api/doctors/{{createDoctor.response.body.data.id}}
+Content-Type: {{json}}
+
+{
+  "salary": 1
+}
+
+### Delete the new doctor → 204
+DELETE {{baseUrl}}/api/doctors/{{createDoctor.response.body.data.id}}
+
+### Delete a doctor WITH appointments → 409 (refund history is kept)
+DELETE {{baseUrl}}/api/doctors/1
+
+### Wrong method on the collection → 405 + Allow: GET, POST
+DELETE {{baseUrl}}/api/doctors
+
+############################################################
+# Appointments: booking (Phase 5)
+# Times are clinic wall-clock time, "YYYY-MM-DD HH:mm".
+# Reload the seed before a demo so the expected results below hold.
+############################################################
+
+### Book → 201 + Location; amountPaid defaults to the doctor's fee (100.00)
+# @name bookAppointment
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 5,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-05-03 10:00"
+}
+
+### Follow the Location header → 200 (includes apptRef, names, status BOOKED)
+GET {{baseUrl}}/api/appointments/{{bookAppointment.response.body.data.id}}
+
+### Book with a discount (AP-002 style) → 201, amountPaid 80
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 6,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-05-03 10:30",
+  "amountPaid": 80
+}
+
+### amountPaid above the fee (100.00) → 422
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 7,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-05-03 11:30",
+  "amountPaid": 100.01
+}
+
+### DOUBLE BOOKING: same doctor + slot as above → 409 + waitlist offer (waitlistType "slot")
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 7,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-05-03 10:00"
+}
+
+### Same, accepting the waitlist offer → 202 Accepted with the waitlist position (503 if Redis is down)
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 7,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-05-03 10:00",
+  "joinWaitlist": true
+}
+
+### Same patient, same time, a different doctor → 409 (no waitlist offer)
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 5,
+  "doctorId": 1,
+  "appointmentDateTime": "2027-05-03 10:00"
+}
+
+### Rebook a CANCELLED slot (Dr. Boateng 2027-03-22 14:00 only has a cancelled row) → 201
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 5,
+  "doctorId": 1,
+  "appointmentDateTime": "2027-03-22 14:00"
+}
+
+### Dr. Boateng's busy day: 11 of 12 booked
+GET {{baseUrl}}/api/doctors/1/appointments?date=2027-03-15
+
+### 12th booking that day → 201
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 1,
+  "doctorId": 1,
+  "appointmentDateTime": "2027-03-15 14:30"
+}
+
+### 13TH BOOKING → 409 "fully booked" + waitlist offer (waitlistType "day")
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 2,
+  "doctorId": 1,
+  "appointmentDateTime": "2027-03-15 15:00"
+}
+
+### OUTSIDE HOURS: 17:00 (last slot starts 16:30) → 422
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 7,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-05-03 17:00"
+}
+
+### 08:30 (before opening) → 422
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 7,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-05-03 08:30"
+}
+
+### 09:15 (not a 30-minute boundary) → 422
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 7,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-05-03 09:15"
+}
+
+### In the past → 422
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 7,
+  "doctorId": 2,
+  "appointmentDateTime": "2026-01-05 10:00"
+}
+
+### Past AND 17:45: every broken rule is listed → 422 with 3 details
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 7,
+  "doctorId": 2,
+  "appointmentDateTime": "2026-01-05 17:45"
+}
+
+### Not a real date (30 February) → 400
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 7,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-02-30 10:00"
+}
+
+### Wrong format (seconds) → 400
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 7,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-05-03 10:00:00"
+}
+
+### Bad body: string id, non-boolean joinWaitlist, unknown field, missing time → 400 listing all
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": "7",
+  "doctorId": 2,
+  "joinWaitlist": "yes",
+  "room": "R-1"
+}
+
+### Unknown patient → 404
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 9999,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-05-03 12:00"
+}
+
+### Unknown doctor → 404
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 7,
+  "doctorId": 9999,
+  "appointmentDateTime": "2027-05-03 12:00"
+}
+
+### Unknown appointment → 404
+GET {{baseUrl}}/api/appointments/9999
+
+### A doctor's day: bad date → 400
+GET {{baseUrl}}/api/doctors/1/appointments?date=2027-02-30
+
+# CONCURRENCY demos (terminal, with the API running):
+#   npm run demo:same-slot    20 simultaneous bookings for ONE slot  → 1 × 201, 19 × 409
+#   npm run demo:daily-cap    6 simultaneous bookings, room for 2    → 2 × 201, day stops at 12
+#   npm run demo:concurrency  both
+
+############################################################
+# Cancellation + refunds (Phase 6)
+# The refund is computed by the SERVER from the notice (appointment time − clinic now):
+#   > 48h → 100%   |   24h–48h inclusive → 50%   |   < 24h → 0%
+# LIVE TIER DEMO: the three bookings below use dates relative to TODAY on your PC
+# ($localDatetime = clinic time, Africa/Johannesburg). Run them between 09:00 and 16:00
+# so "today 16:30" is still in the future.
+############################################################
+
+### Tier 0%: book TODAY 16:30 (< 24h notice) → 201
+# @name tierZero
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 1,
+  "doctorId": 2,
+  "appointmentDateTime": "{{$localDatetime 'YYYY-MM-DD'}} 16:30"
+}
+
+### ... cancel it → 200, refundPercent 0, refundAmount 0
+PATCH {{baseUrl}}/api/appointments/{{tierZero.response.body.data.id}}/cancel
+
+### Tier 50%: book TOMORROW 16:30 (between 24h and 48h notice) → 201
+# @name tierHalf
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 2,
+  "doctorId": 2,
+  "appointmentDateTime": "{{$localDatetime 'YYYY-MM-DD' 1 d}} 16:30"
+}
+
+### ... cancel it → 200, refundPercent 50, refundAmount 50 (fee 100.00)
+PATCH {{baseUrl}}/api/appointments/{{tierHalf.response.body.data.id}}/cancel
+
+### Tier 100%: book in 3 DAYS at 10:00 (always > 48h notice) → 201
+# @name tierFull
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 3,
+  "doctorId": 2,
+  "appointmentDateTime": "{{$localDatetime 'YYYY-MM-DD' 3 d}} 10:00"
+}
+
+### ... cancel it → 200, refundPercent 100, refundAmount 100
+PATCH {{baseUrl}}/api/appointments/{{tierFull.response.body.data.id}}/cancel
+
+### Cancel the same appointment AGAIN → 422 "already cancelled"
+PATCH {{baseUrl}}/api/appointments/{{tierFull.response.body.data.id}}/cancel
+
+### The cancelled record is KEPT (status CANCELLED + refund columns) → 200
+GET {{baseUrl}}/api/appointments/{{tierFull.response.body.data.id}}
+
+### The freed slot is bookable again by another patient → 201
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 4,
+  "doctorId": 2,
+  "appointmentDateTime": "{{$localDatetime 'YYYY-MM-DD' 3 d}} 10:00"
+}
+
+### A seeded appointment (cancelled months ahead in the seed: 100%) is already cancelled → 422
+PATCH {{baseUrl}}/api/appointments/12/cancel
+
+### The client may NOT send refund values → 400
+PATCH {{baseUrl}}/api/appointments/1/cancel
+Content-Type: {{json}}
+
+{
+  "refundPercent": 100
+}
+
+### Unknown appointment → 404
+PATCH {{baseUrl}}/api/appointments/99999/cancel
+
+### Bad id → 400
+PATCH {{baseUrl}}/api/appointments/abc/cancel
+
+### Wrong method → 405 (Allow: PATCH)
+DELETE {{baseUrl}}/api/appointments/1/cancel
+
+############################################################
+# Waitlist + worker promotion (Phase 8)
+# Needs Redis (docker compose up -d) and the worker in a 2nd terminal: npm run worker
+############################################################
+
+### 1. Patient 5 takes Dr. Adjei's 2027-08-02 10:00 slot → 201
+# @name waitA
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 5,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-08-02 10:00"
+}
+
+### 2. Patient 6 wants the same slot and accepts the waitlist → 202, position 1
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 6,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-08-02 10:00",
+  "joinWaitlist": true
+}
+
+### 3. Patient 6 joins again → 409 "already on the slot waitlist"
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 6,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-08-02 10:00",
+  "joinWaitlist": true
+}
+
+### 4. Patient 7 joins → 202, position 2
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 7,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-08-02 10:00",
+  "joinWaitlist": true
+}
+
+### 5. Patient 5 (who HOLDS the slot) tries to wait for it → 409
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 5,
+  "doctorId": 2,
+  "appointmentDateTime": "2027-08-02 10:00",
+  "joinWaitlist": true
+}
+
+### 6. See the waitlist: slot 2027-08-02 10:00 → patients [6, 7]
+GET {{baseUrl}}/api/doctors/2/waitlist
+
+### 7. PERMANENT-FAILURE setup: patient 6 books the same time with Dr. Boateng → 201
+POST {{baseUrl}}/api/appointments
+Content-Type: {{json}}
+
+{
+  "patientId": 6,
+  "doctorId": 1,
+  "appointmentDateTime": "2027-08-02 10:00"
+}
+
+### 8. Cancel patient 5 → slot-freed job. The worker tries patient 6 (busy → waitlist:failed),
+###    then books patient 7. Watch the worker terminal and logs/audit.log.
+PATCH {{baseUrl}}/api/appointments/{{waitA.response.body.data.id}}/cancel
+
+### 9. Patient 7 now holds the slot
+GET {{baseUrl}}/api/doctors/2/appointments?date=2027-08-02
+
+### 10. Waitlist is empty; patient 6 is under "failed" with the reason (never lost)
+GET {{baseUrl}}/api/doctors/2/waitlist
+
+### Waitlist: bad id → 400
+GET {{baseUrl}}/api/doctors/abc/waitlist
+
+### Waitlist: unknown doctor → 404
+GET {{baseUrl}}/api/doctors/9999/waitlist
+
+### Waitlist: wrong method → 405
+POST {{baseUrl}}/api/doctors/2/waitlist
+
+# Day waitlist: fill a doctor-day to 12 (e.g. npm run demo:daily-cap prints the day), then
+# book a 13th with "joinWaitlist": true → 202 type "day"; cancel ANY booking that day →
+# the worker books the day-list patient into the freed slot.
+#
+# Redis down: `docker compose stop` → booking 201 and cancelling 200 still work (warning in the
+# server log), joinWaitlist / GET waitlist → 503. `docker compose up -d`: within a minute the
+# worker's waitlist sweep re-queues the promotion that was lost while Redis was down.
+
+############################################################
+# Statistics + reports (Phase 9): all figures computed in SQL
+############################################################
+
+### Dr. Boateng's busy week: 2027-03-15 = 11 (91.7%), other days 0, window 11/84 = 13.1%, revenue 1620
+GET {{baseUrl}}/api/doctors/1/statistics?from=2027-03-15
+
+### Default window = the next 7 days from today (clinic clock)
+GET {{baseUrl}}/api/doctors/1/statistics
+
+### Dr. Owusu-Ansah (no appointments): revenue 0, upcoming 0, seven zero days
+GET {{baseUrl}}/api/doctors/3/statistics
+
+### Impossible ?from → 400
+GET {{baseUrl}}/api/doctors/1/statistics?from=2027-02-30
+
+### Malformed ?from → 400
+GET {{baseUrl}}/api/doctors/1/statistics?from=2027-3-1
+
+### Unknown doctor → 404
+GET {{baseUrl}}/api/doctors/9999/statistics
+
+### Wrong method → 405
+POST {{baseUrl}}/api/doctors/1/statistics
+
+### Doctors report: Boateng 13 / 1620, Adjei 3 / 300, Owusu-Ansah 0 / 0 (LEFT JOIN + COALESCE)
+GET {{baseUrl}}/api/reports/doctors
+
+### Busy days (> 80% of 12): Dr. Boateng 2027-03-15, 11 booked, 91.7%
+GET {{baseUrl}}/api/reports/busy-days
+
+### Wrong method → 405
+DELETE {{baseUrl}}/api/reports/busy-days
+
+############################################################
+# Feedback page (Phase 10): also open these in a browser
+############################################################
+
+### English (default)
+GET {{baseUrl}}/feedback
+
+### French
+GET {{baseUrl}}/feedback?lang=fr
+
+### Unsupported language → English, no crash
+GET {{baseUrl}}/feedback?lang=xx
+
+### Repeated lang (array) → English, no crash
+GET {{baseUrl}}/feedback?lang=fr&lang=en
+
+############################################################
+# General
+############################################################
+
+### Unknown route → 404 { error: { status: 404, message: "Route GET /api/nope not found" } }
+GET {{baseUrl}}/api/nope
