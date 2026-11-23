@@ -1,5 +1,7 @@
 // An error that already knows its HTTP status. Anything thrown as an AppError is
 // sent to the client as-is by the error middleware; anything else is a 500.
+const { HTTP_STATUS } = require('../config/constants');
+
 class AppError extends Error {
   /**
    * @param {number} status   HTTP status code
@@ -17,23 +19,23 @@ class AppError extends Error {
   }
 
   static badRequest(message, details) {
-    return new AppError(400, message, details);
+    return new AppError(HTTP_STATUS.BAD_REQUEST, message, details);
   }
 
   static notFound(message) {
-    return new AppError(404, message);
+    return new AppError(HTTP_STATUS.NOT_FOUND, message);
   }
 
   static conflict(message, details, extra) {
-    return new AppError(409, message, details, extra);
+    return new AppError(HTTP_STATUS.CONFLICT, message, details, extra);
   }
 
   static unprocessable(message, details) {
-    return new AppError(422, message, details);
+    return new AppError(HTTP_STATUS.UNPROCESSABLE, message, details);
   }
 
   static serviceUnavailable(message) {
-    return new AppError(503, message);
+    return new AppError(HTTP_STATUS.SERVICE_UNAVAILABLE, message);
   }
 }
 

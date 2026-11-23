@@ -6,9 +6,11 @@
 // the PC, the database server or the CI machine.
 //
 // Pure module: no db/redis imports, safe for unit tests.
-const { CLINIC_TIMEZONE } = require('../config/constants');
+const { clinicTimezone } = require('../config/settings');
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MS_PER_HOUR = 60 * 60 * 1000;
+const HOURS_PER_DAY = 24;
+const MS_PER_DAY = HOURS_PER_DAY * MS_PER_HOUR;
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DATETIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/;
 
@@ -36,10 +38,10 @@ function getFormatter(timeZone) {
 /**
  * Current clinic wall-clock time as a "clinic Date".
  * @param {Date} [instant=new Date()]  the real moment (injectable for tests)
- * @param {string} [timeZone=CLINIC_TIMEZONE]
+ * @param {string} [timeZone=clinicTimezone()]
  * @returns {Date}
  */
-function clinicNow(instant = new Date(), timeZone = CLINIC_TIMEZONE) {
+function clinicNow(instant = new Date(), timeZone = clinicTimezone()) {
   const parts = {};
   for (const { type, value } of getFormatter(timeZone).formatToParts(instant)) {
     parts[type] = value;
@@ -117,6 +119,8 @@ function dayRange(clinicDate) {
 }
 
 module.exports = {
+  MS_PER_HOUR,
+  MS_PER_DAY,
   clinicNow,
   parseClinicDateTime,
   parseClinicDate,

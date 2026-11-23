@@ -1,9 +1,10 @@
 // i18n/l10n helpers for GET /feedback (README Part G).
 // Pure functions plus ONE async loader (fs/promises, never *Sync) that is meant to
 // run once at startup. No db/redis imports, so unit tests can load this module.
-const fs = require('fs/promises');
-const path = require('path');
-const { I18N, CLINIC_TIMEZONE } = require('../config/constants');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { I18N } = require('../config/constants');
+const { clinicTimezone } = require('../config/settings');
 
 const DEFAULT_LOCALES_DIR = path.join(__dirname, '..', '..', 'locales');
 
@@ -72,9 +73,9 @@ function resolveLanguage(raw) {
  * clinic time) together with the clinic time zone would shift it twice.
  * @param {Date} instant
  * @param {string} language  a key of I18N.LOCALES
- * @param {string} [timeZone=CLINIC_TIMEZONE]
+ * @param {string} [timeZone=clinicTimezone()]
  */
-function formatToday(instant, language, timeZone = CLINIC_TIMEZONE) {
+function formatToday(instant, language, timeZone = clinicTimezone()) {
   return new Intl.DateTimeFormat(I18N.LOCALES[language], { dateStyle: 'full', timeZone }).format(instant);
 }
 

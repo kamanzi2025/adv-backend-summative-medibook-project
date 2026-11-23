@@ -2,10 +2,7 @@
 // by the server. No body or an empty JSON object {} is accepted; anything else
 // (e.g. a client trying to send refundPercent) is a 400. Pure: no DB, no Redis.
 const AppError = require('../utils/AppError');
-
-function isPlainObject(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
+const { isPlainObject } = require('./common');
 
 /** @throws {AppError} 400 if the body is not absent or {} */
 function assertEmptyCancelBody(body) {

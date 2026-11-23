@@ -55,7 +55,7 @@ function promotionFailureReason(resultOrError) {
 }
 
 /**
- * Startup sweep: which slot should get a "slot-freed" job for one waiting list?
+ * Waitlist sweep: which slot should get a "slot-freed" job for one waiting list?
  * Recovers promotions whose job was lost (e.g. a cancellation while Redis was down).
  * @param {object} list  parseWaitlistKey() result of a waiting (non-processing) list
  * @param {object[]} dayAppointments  the doctor's appointments that day (findByDoctorBetween)

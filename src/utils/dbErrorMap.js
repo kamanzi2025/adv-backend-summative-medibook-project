@@ -1,5 +1,6 @@
 // Translates known MySQL errors into safe HTTP answers. Pure: it only reads
 // err.code / err.sqlMessage. The constraint names come from database/schema.sql.
+const { HTTP_STATUS } = require('../config/constants');
 
 const CONSTRAINT_MESSAGES = Object.freeze({
   uq_patient_email: { field: 'email', message: 'A patient with this email already exists' },
@@ -8,11 +9,11 @@ const CONSTRAINT_MESSAGES = Object.freeze({
   uq_appt_patient_active_slot: { field: 'datetime', message: 'This patient already has an appointment at that time' },
 });
 
-// Deleting a row that appointments still point to (ON DELETE RESTRICT).
-const FOREIGN_KEY_MESSAGES = Object.freeze({
-  fk_appt_patient: 'This patient has appointments and cannot be deleted. Appointments (including cancelled ones) are kept permanently as refund history.',
-  fk_appt_doctor: 'This doctor has appointments and cannot be deleted. Appointments (including cancelled ones) are kept permanently as refund history.',
-});
+// Deleting a row that other rows still point to (ON DELETE RESTRICT). MySQL sends
+// ER_ROW_IS_REFERENCED_2 (with the constraint name) to users who may read the child
+// table's definition, and ER_ROW_IS_REFERENCED (1217, no name) to a least-privilege
+// user like medibook_user. Both mean the same thing, so both are matched here.
+const ROW_REFERENCED_CODES = new Set(['ER_ROW_IS_REFERENCED', 'ER_ROW_IS_REFERENCED_2']);
 
 // Errors that mean "the database is unreachable", not "the request was wrong".
 const UNAVAILABLE_CODES = new Set([
@@ -33,10 +34,9 @@ function duplicateKeyName(err) {
   return match ? match[1] : null;
 }
 
-function constraintFromForeignKey(sqlMessage = '') {
-  // "... CONSTRAINT `fk_appt_doctor` FOREIGN KEY ..."
-  const match = sqlMessage.match(/CONSTRAINT `([^`]+)`/);
-  return match ? match[1] : null;
+/** True if a DELETE failed because other rows still reference the row (FK RESTRICT). */
+function isRowReferenced(err) {
+  return Boolean(err) && ROW_REFERENCED_CODES.has(err.code);
 }
 
 function constraintFromCheck(sqlMessage = '') {
@@ -57,37 +57,40 @@ function withDetails(status, known, fallbackMessage) {
 function mapDbError(err) {
   if (!err || typeof err.code !== 'string') return null;
 
+  if (isRowReferenced(err)) {
+    // Safety net only: the patient/doctor models already turn this into a specific 409.
+    return { status: HTTP_STATUS.CONFLICT, message: 'This record is referenced by other records and cannot be deleted' };
+  }
+
   switch (err.code) {
     case 'ER_DUP_ENTRY': {
-      return withDetails(409, CONSTRAINT_MESSAGES[duplicateKeyName(err)],
+      return withDetails(HTTP_STATUS.CONFLICT, CONSTRAINT_MESSAGES[duplicateKeyName(err)],
         'A record with the same unique value already exists');
-    }
-    case 'ER_ROW_IS_REFERENCED':
-    case 'ER_ROW_IS_REFERENCED_2': {
-      const name = constraintFromForeignKey(err.sqlMessage);
-      return {
-        status: 409,
-        message: FOREIGN_KEY_MESSAGES[name] || 'This record is referenced by other records and cannot be deleted',
-      };
     }
     case 'ER_NO_REFERENCED_ROW':
     case 'ER_NO_REFERENCED_ROW_2':
-      return { status: 404, message: 'The referenced patient or doctor does not exist' };
+      return { status: HTTP_STATUS.NOT_FOUND, message: 'The referenced patient or doctor does not exist' };
     case 'ER_CHECK_CONSTRAINT_VIOLATED': {
       const name = constraintFromCheck(err.sqlMessage);
-      return { status: 400, message: `A value breaks the database rule ${name || '(unknown)'}` };
+      return { status: HTTP_STATUS.BAD_REQUEST, message: `A value breaks the database rule ${name || '(unknown)'}` };
     }
     case 'ER_DATA_TOO_LONG':
-      return { status: 400, message: 'A value is too long for its field' };
+      return { status: HTTP_STATUS.BAD_REQUEST, message: 'A value is too long for its field' };
     default:
       if (BUSY_CODES.has(err.code)) {
-        return { status: 503, message: 'The clinic is very busy right now. Please try again in a moment.' };
+        return {
+          status: HTTP_STATUS.SERVICE_UNAVAILABLE,
+          message: 'The clinic is very busy right now. Please try again in a moment.',
+        };
       }
       if (UNAVAILABLE_CODES.has(err.code)) {
-        return { status: 503, message: 'The database is temporarily unavailable. Please try again shortly.' };
+        return {
+          status: HTTP_STATUS.SERVICE_UNAVAILABLE,
+          message: 'The database is temporarily unavailable. Please try again shortly.',
+        };
       }
       return null;
   }
 }
 
-module.exports = { mapDbError, duplicateKeyName };
+module.exports = { mapDbError, duplicateKeyName, isRowReferenced };

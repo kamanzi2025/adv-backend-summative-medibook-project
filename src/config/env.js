@@ -1,5 +1,6 @@
 // Loads .env once and exposes typed, validated connection settings.
 // Imported by the web server and the worker. Never imported by pure utils or tests.
+// Optional settings (CLINIC_TIMEZONE, LOG_DIR) are read by config/settings.js.
 require('dotenv').config();
 
 function required(name) {
@@ -33,7 +34,6 @@ const env = Object.freeze({
     port: toPort('REDIS_PORT', '6379'),
     password: process.env.REDIS_PASSWORD || undefined,
   }),
-  logDir: process.env.LOG_DIR || 'logs',
 });
 
 module.exports = env;

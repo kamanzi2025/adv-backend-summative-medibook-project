@@ -1,10 +1,9 @@
 // Pure refund policy (README Part C.3). No DB, no Redis, no real clock:
 // "now" is always passed in, so tests can use fixed dates.
 const { REFUND_POLICY } = require('../config/constants');
-const { toCents } = require('./payment');
+const { CENTS_PER_UNIT, toCents } = require('./payment');
+const { MS_PER_HOUR } = require('./clock');
 
-const MS_PER_HOUR = 60 * 60 * 1000;
-const CENTS_PER_UNIT = 100;
 const PERCENT_BASE = 100;
 // hoursNotice is rounded to 2 decimals for display only; the tier is decided on exact ms.
 const HOURS_DISPLAY_FACTOR = 100;

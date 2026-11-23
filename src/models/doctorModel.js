@@ -1,6 +1,8 @@
 // All SQL for the doctors table. Every value is a ? placeholder.
 // Rows are mapped from snake_case columns to camelCase API objects here.
 const { pool } = require('../config/db');
+const { REMOVE_OUTCOME } = require('../config/constants');
+const { isRowReferenced } = require('../utils/dbErrorMap');
 
 function toDoctor(row) {
   return {
@@ -60,12 +62,18 @@ async function update(id, { fullName, specialty, consultationFee, room }) {
 }
 
 /**
- * Throws ER_ROW_IS_REFERENCED_2 (mapped to 409) if the doctor has appointments.
- * @returns {Promise<boolean>} false if the id doesn't exist
+ * fk_appt_doctor is ON DELETE RESTRICT, so MySQL refuses to delete a doctor who
+ * has appointments (cancelled ones included); that is reported as HAS_APPOINTMENTS.
+ * @returns {Promise<string>} a REMOVE_OUTCOME value
  */
 async function remove(id) {
-  const [result] = await pool.execute('DELETE FROM doctors WHERE id = ?', [id]);
-  return result.affectedRows > 0;
+  try {
+    const [result] = await pool.execute('DELETE FROM doctors WHERE id = ?', [id]);
+    return result.affectedRows > 0 ? REMOVE_OUTCOME.DELETED : REMOVE_OUTCOME.NOT_FOUND;
+  } catch (err) {
+    if (isRowReferenced(err)) return REMOVE_OUTCOME.HAS_APPOINTMENTS;
+    throw err;
+  }
 }
 
 module.exports = { findAll, findById, create, update, remove };

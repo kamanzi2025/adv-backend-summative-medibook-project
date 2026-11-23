@@ -3,6 +3,7 @@
 // (DESIGN_NOTES §4: no NOW()/CURDATE() in SQL) and renames columns to camelCase.
 const { pool } = require('../config/db');
 const { APPOINTMENT_STATUS, DAILY_CAP, STATS_WINDOW_DAYS } = require('../config/constants');
+const { REVENUE_COLLECTED } = require('./sqlFragments');
 
 /**
  * Revenue (lifetime), upcoming count and the window's utilization for one doctor.
@@ -21,7 +22,7 @@ async function findDoctorSummary({ doctorId, now, windowStart, windowEnd }) {
        FROM (
              SELECT d.id        AS doctor_id,
                     d.full_name AS doctor_name,
-                    COALESCE(SUM(a.amount_paid - COALESCE(a.refund_amount, 0)), 0) AS revenue_collected,
+                    ${REVENUE_COLLECTED} AS revenue_collected,
                     COUNT(CASE WHEN a.status = ? AND a.appt_datetime > ? THEN 1 END) AS upcoming_appointments,
                     COUNT(CASE WHEN a.status = ?
                                 AND a.appt_datetime >= ? AND a.appt_datetime < ? THEN 1 END) AS booked_in_window,

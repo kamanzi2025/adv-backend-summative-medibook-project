@@ -17,6 +17,16 @@ const CANCEL_OUTCOME = Object.freeze({
 // Transient lock errors: safe to retry the whole transaction.
 const RETRYABLE_LOCK_ERRORS = new Set(['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT']);
 
+// One appointment row with its patient and doctor names; shared by every read below.
+// Constant SQL text only (no request data): the WHERE values are ? placeholders.
+const APPOINTMENT_SELECT = `
+  SELECT a.id, a.appt_ref, a.patient_id, p.full_name AS patient_name,
+         a.doctor_id, d.full_name AS doctor_name, a.appt_datetime, a.amount_paid,
+         a.status, a.booked_on, a.cancelled_at, a.refund_percent, a.refund_amount
+    FROM appointments a
+    JOIN patients p ON p.id = a.patient_id
+    JOIN doctors  d ON d.id = a.doctor_id`;
+
 function toAppointment(row) {
   return {
     id: row.id,
@@ -38,16 +48,7 @@ function toAppointment(row) {
 
 /** @returns {Promise<object|null>} one appointment with patient and doctor names */
 async function findById(id) {
-  const [rows] = await pool.execute(
-    `SELECT a.id, a.appt_ref, a.patient_id, p.full_name AS patient_name,
-            a.doctor_id, d.full_name AS doctor_name, a.appt_datetime, a.amount_paid,
-            a.status, a.booked_on, a.cancelled_at, a.refund_percent, a.refund_amount
-       FROM appointments a
-       JOIN patients p ON p.id = a.patient_id
-       JOIN doctors  d ON d.id = a.doctor_id
-      WHERE a.id = ?`,
-    [id],
-  );
+  const [rows] = await pool.execute(`${APPOINTMENT_SELECT} WHERE a.id = ?`, [id]);
   return rows.length > 0 ? toAppointment(rows[0]) : null;
 }
 
@@ -57,12 +58,7 @@ async function findById(id) {
  */
 async function findByDoctorBetween(doctorId, dayStart, dayEnd) {
   const [rows] = await pool.execute(
-    `SELECT a.id, a.appt_ref, a.patient_id, p.full_name AS patient_name,
-            a.doctor_id, d.full_name AS doctor_name, a.appt_datetime, a.amount_paid,
-            a.status, a.booked_on, a.cancelled_at, a.refund_percent, a.refund_amount
-       FROM appointments a
-       JOIN patients p ON p.id = a.patient_id
-       JOIN doctors  d ON d.id = a.doctor_id
+    `${APPOINTMENT_SELECT}
       WHERE a.doctor_id = ? AND a.appt_datetime >= ? AND a.appt_datetime < ?
       ORDER BY a.appt_datetime, a.id`,
     [doctorId, dayStart, dayEnd],
@@ -171,7 +167,7 @@ async function attemptBooking(request) {
 
 /**
  * Books one appointment with every rule enforced inside a transaction.
- * Used by the API controller AND by the waitlist worker (Phase 8).
+ * Used by the API controller AND by the waitlist worker.
  *
  * @param {object} request
  * @param {number} request.patientId

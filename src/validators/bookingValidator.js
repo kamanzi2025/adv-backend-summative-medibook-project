@@ -1,7 +1,7 @@
 // Pure validation for bookings: 400 for a malformed request, 422 for a
 // well-formed request that breaks a clinic rule.
 const AppError = require('../utils/AppError');
-const { parseClinicDateTime, parseClinicDate } = require('../utils/clock');
+const { parseClinicDateTime } = require('../utils/clock');
 const { slotRuleViolations } = require('../utils/slotRules');
 const { positiveInteger, money, booleanValue, validateBody } = require('./common');
 
@@ -52,19 +52,4 @@ function assertSlotBookable(slot, now) {
   }
 }
 
-/**
- * ?date=YYYY-MM-DD, defaulting to `today` when it isn't sent.
- * @throws {AppError} 400
- */
-function parseDateQuery(raw, today) {
-  if (raw === undefined) return today;
-  const date = parseClinicDate(raw);
-  if (!date) {
-    throw AppError.badRequest('Invalid query: check date', [
-      { field: 'date', message: 'must be a real date in the format "YYYY-MM-DD"' },
-    ]);
-  }
-  return date;
-}
-
-module.exports = { validateBookingBody, assertSlotBookable, parseDateQuery };
+module.exports = { validateBookingBody, assertSlotBookable };

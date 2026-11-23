@@ -1,6 +1,7 @@
 // Generic, pure validation building blocks (no DB, no Redis).
 // A "field rule" is a function raw => { value } | { error }.
 const AppError = require('../utils/AppError');
+const { parseClinicDate } = require('../utils/clock');
 const { ID_MAX, MONEY_MAX, PAGINATION } = require('../config/constants');
 
 const POSITIVE_INT = /^[1-9][0-9]*$/;
@@ -158,7 +159,29 @@ function parsePagination(query = {}) {
   return { limit, offset };
 }
 
+/**
+ * An optional ?<field>=YYYY-MM-DD query value (e.g. ?date= for a doctor's day,
+ * ?from= for statistics). Missing -> `today`. Anything else that isn't one real
+ * "YYYY-MM-DD" date (wrong shape, 2027-02-30, or an array from ?from=a&from=b) -> 400.
+ * @param {unknown} raw   req.query[field]
+ * @param {Date} today    clinic Date (clinicNow())
+ * @param {string} field  query parameter name, for the error message
+ * @returns {Date} clinic Date; only its calendar day is used
+ * @throws {AppError} 400
+ */
+function parseDateQuery(raw, today, field) {
+  if (raw === undefined) return today;
+  const date = parseClinicDate(raw);
+  if (!date) {
+    throw AppError.badRequest(`Invalid query: check ${field}`, [
+      { field, message: 'must be one real date in the format "YYYY-MM-DD"' },
+    ]);
+  }
+  return date;
+}
+
 module.exports = {
+  isPlainObject,
   text,
   money,
   positiveInteger,
@@ -166,4 +189,5 @@ module.exports = {
   validateBody,
   parseId,
   parsePagination,
+  parseDateQuery,
 };

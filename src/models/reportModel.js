@@ -3,6 +3,7 @@
 // (statuses, daily cap, busy threshold) are passed in as ? parameters.
 const { pool } = require('../config/db');
 const { APPOINTMENT_STATUS, DAILY_CAP, BUSY_THRESHOLD } = require('../config/constants');
+const { REVENUE_COLLECTED } = require('./sqlFragments');
 
 /**
  * Every doctor, including doctors with zero appointments (LEFT JOIN + COALESCE),
@@ -17,7 +18,7 @@ async function findDoctorsReport() {
             COUNT(a.id)                                     AS total_appointments,
             COUNT(CASE WHEN a.status = ? THEN 1 END)        AS booked_appointments,
             COUNT(CASE WHEN a.status = ? THEN 1 END)        AS cancelled_appointments,
-            COALESCE(SUM(a.amount_paid - COALESCE(a.refund_amount, 0)), 0) AS revenue_collected,
+            ${REVENUE_COLLECTED}                            AS revenue_collected,
             COALESCE(SUM(a.refund_amount), 0)               AS total_refunded
        FROM doctors d
        LEFT JOIN appointments a ON a.doctor_id = d.id

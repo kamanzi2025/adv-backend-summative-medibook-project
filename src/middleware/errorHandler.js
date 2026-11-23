@@ -2,8 +2,9 @@
 // Response shape for every error: { error: { status, message, details? } }
 const AppError = require('../utils/AppError');
 const { mapDbError } = require('../utils/dbErrorMap');
+const { HTTP_STATUS } = require('../config/constants');
 
-const INTERNAL_ERROR = 500;
+const { INTERNAL_ERROR } = HTTP_STATUS;
 
 function toAppError(err) {
   if (err instanceof AppError) return err;
@@ -15,7 +16,7 @@ function toAppError(err) {
     ]);
   }
   if (err.type === 'entity.too.large') {
-    return new AppError(413, 'Request body is too large');
+    return new AppError(HTTP_STATUS.PAYLOAD_TOO_LARGE, 'Request body is too large');
   }
 
   const mapped = mapDbError(err);
@@ -23,7 +24,7 @@ function toAppError(err) {
 
   // Other 4xx errors raised by Express itself (e.g. unsupported charset).
   const status = err.status || err.statusCode;
-  if (Number.isInteger(status) && status >= 400 && status < INTERNAL_ERROR) {
+  if (Number.isInteger(status) && status >= HTTP_STATUS.BAD_REQUEST && status < INTERNAL_ERROR) {
     return new AppError(status, err.expose ? err.message : 'Bad request');
   }
 

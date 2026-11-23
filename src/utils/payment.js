@@ -21,4 +21,4 @@ function resolveAmountPaid(requested, fee) {
   return { amount: requested };
 }
 
-module.exports = { toCents, resolveAmountPaid };
+module.exports = { CENTS_PER_UNIT, toCents, resolveAmountPaid };

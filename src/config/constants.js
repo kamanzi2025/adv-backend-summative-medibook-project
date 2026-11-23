@@ -17,7 +17,7 @@ const REFUND_POLICY = Object.freeze({
 });
 
 // What the booking model reports back. The controller turns these into HTTP
-// statuses; the worker (Phase 8) turns them into waitlist decisions.
+// statuses; the waitlist worker turns them into promotion decisions.
 const BOOKING_OUTCOME = Object.freeze({
   BOOKED: 'BOOKED',
   DOCTOR_NOT_FOUND: 'DOCTOR_NOT_FOUND',
@@ -26,6 +26,29 @@ const BOOKING_OUTCOME = Object.freeze({
   DAY_FULL: 'DAY_FULL',
   SLOT_TAKEN: 'SLOT_TAKEN',
   PATIENT_DOUBLE_BOOKED: 'PATIENT_DOUBLE_BOOKED',
+});
+
+// What patientModel.remove / doctorModel.remove report back.
+const REMOVE_OUTCOME = Object.freeze({
+  DELETED: 'DELETED',
+  NOT_FOUND: 'NOT_FOUND',
+  HAS_APPOINTMENTS: 'HAS_APPOINTMENTS',
+});
+
+// Every HTTP status code the API sends, named once.
+const HTTP_STATUS = Object.freeze({
+  OK: 200,
+  CREATED: 201,
+  ACCEPTED: 202,
+  NO_CONTENT: 204,
+  BAD_REQUEST: 400,
+  NOT_FOUND: 404,
+  METHOD_NOT_ALLOWED: 405,
+  CONFLICT: 409,
+  PAYLOAD_TOO_LARGE: 413,
+  UNPROCESSABLE: 422,
+  INTERNAL_ERROR: 500,
+  SERVICE_UNAVAILABLE: 503,
 });
 
 const WAITLIST_TYPE = Object.freeze({ SLOT: 'slot', DAY: 'day' });
@@ -40,8 +63,8 @@ const AUDIT_EVENT = Object.freeze({
 });
 
 module.exports = Object.freeze({
-  // The clinic's IANA time zone. Overridable through .env for other clinics.
-  CLINIC_TIMEZONE: process.env.CLINIC_TIMEZONE || 'Africa/Johannesburg',
+  // The clinic's IANA time zone when CLINIC_TIMEZONE is not set (see config/settings.js).
+  DEFAULT_CLINIC_TIMEZONE: 'Africa/Johannesburg',
 
   // Working day: slots start at WORKING_HOURS_START, the last one starts
   // SLOT_MINUTES before WORKING_HOURS_END (i.e. 16:30).
@@ -61,6 +84,8 @@ module.exports = Object.freeze({
   APPOINTMENT_STATUS,
   REFUND_POLICY,
   BOOKING_OUTCOME,
+  REMOVE_OUTCOME,
+  HTTP_STATUS,
   WAITLIST_TYPE,
   AUDIT_EVENT,
 
@@ -91,7 +116,7 @@ module.exports = Object.freeze({
   PAGINATION: Object.freeze({ DEFAULT_LIMIT: 20, MAX_LIMIT: 100 }),
 
   // Audit log (Part D): one JSON line per event in <LOG_DIR>/<FILE_NAME>.
-  // LOG_DIR comes from process.env.LOG_DIR, falling back to DEFAULT_DIR.
+  // LOG_DIR is read by config/settings.js, falling back to DEFAULT_DIR.
   AUDIT_LOG: Object.freeze({ DEFAULT_DIR: 'logs', FILE_NAME: 'audit.log' }),
 
   // BullMQ queue names (Part E). The web server only produces jobs;
@@ -105,6 +130,9 @@ module.exports = Object.freeze({
   QUEUE_JOB_OPTIONS: Object.freeze({ ATTEMPTS: 5, BACKOFF_DELAY_MS: 2000 }),
   // slot-freed runs one job at a time so two promotions never race for one slot.
   WORKER_CONCURRENCY: Object.freeze({ SLOT_FREED: 1, SEND_CONFIRMATION: 5 }),
+  // The worker re-runs the waitlist sweep this often (not only at start-up), so a
+  // "slot-freed" job lost while Redis was down is recovered without a restart.
+  WAITLIST_SWEEP_INTERVAL_MS: 60000,
 
   // Redis waitlist keys (plain Redis lists, FIFO: RPUSH to join, LMOVE ... LEFT to promote):
   //   <PREFIX>:<doctorId>:slot:<YYYY-MM-DDTHH:mm>   waiting for one exact slot
