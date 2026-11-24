@@ -5,7 +5,7 @@ Exactly 3 tables (`patients`, `doctors`, `appointments`), a separate background 
 Jest unit tests and a bilingual feedback page.
 
 > The original assignment brief is kept unchanged **below the divider** at the end of this section.
-> Detailed reasoning for every decision: [`DESIGN_NOTES.md`](DESIGN_NOTES.md). Demo order: [`VIDEO_SCRIPT.md`](VIDEO_SCRIPT.md).
+> Detailed reasoning for every decision: [`DESIGN_NOTES.md`](DESIGN_NOTES.md).
 > Schema diagram: [`schema-diagram.png`](schema-diagram.png), rendered from [`docs/schema-diagram.html`](docs/schema-diagram.html) (also as [`docs/schema.dbml`](docs/schema.dbml) and Mermaid in [`docs/schema-diagram.md`](docs/schema-diagram.md)).
 
 ## Prerequisites
