@@ -12,6 +12,10 @@ diagram is [`schema-diagram.png`](schema-diagram.png), a screenshot of [`docs/sc
 The same design is also in [`docs/schema.dbml`](docs/schema.dbml) (for dbdiagram.io) and as Mermaid in
 [`docs/schema-diagram.md`](docs/schema-diagram.md).
 
+## Walkthrough video
+
+[Watch the walkthrough video (Google Drive)](https://drive.google.com/drive/folders/1yvDwgOVo46LXzWo8cpYIiliQwrjxVS3d?usp=sharing)
+
 ## Prerequisites
 
 - Node.js 18 or newer, with npm. I developed it on Node 22.
