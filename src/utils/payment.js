@@ -1,5 +1,5 @@
-// Pure money helpers. Amounts are compared in integer cents so that
-// floating-point noise (0.1 + 0.2) can never decide a business rule.
+// Money helpers. Amounts are compared in whole cents so floating-point noise
+// (0.1 + 0.2) can never decide a business rule.
 const CENTS_PER_UNIT = 100;
 
 function toCents(amount) {
@@ -7,11 +7,11 @@ function toCents(amount) {
 }
 
 /**
- * What the patient pays for a booking.
+ * How much the patient pays for a booking.
  * - not sent      -> the doctor's consultation fee
- * - 0 .. fee      -> that amount (a discount, like AP-002: 120.00 on a 150.00 fee)
- * - more than fee -> rejected (the clinic never charges above the fee)
- * @param {number|undefined} requested  already validated as >= 0 with <= 2 decimals
+ * - 0 up to fee   -> that amount (a discount, like AP-002: 120.00 on a 150.00 fee)
+ * - more than fee -> rejected, since the clinic never charges more than the fee
+ * @param {number|undefined} requested  already checked to be >= 0 with at most 2 decimals
  * @param {number} fee
  * @returns {{ amount: number } | { error: 'EXCEEDS_FEE' }}
  */

@@ -1,6 +1,6 @@
-// i18n/l10n helpers for GET /feedback (README Part G).
-// Pure functions plus ONE async loader (fs/promises, never *Sync) that is meant to
-// run once at startup. No db/redis imports, so unit tests can load this module.
+// Translation helpers for GET /feedback (Part G). Apart from one async loader
+// (fs/promises, never *Sync) that runs once at start-up, these are pure functions
+// with no database or Redis imports, so the tests can load this file.
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { I18N } = require('../config/constants');
@@ -8,10 +8,10 @@ const { clinicTimezone } = require('../config/settings');
 
 const DEFAULT_LOCALES_DIR = path.join(__dirname, '..', '..', 'locales');
 
-// README Part G: the form has exactly 5 essay questions.
+// The brief asks for exactly 5 essay questions.
 const FEEDBACK_QUESTION_COUNT = 5;
 
-// Every locale file must define these string keys (plus `questions`).
+// Keys every locale file must have, as well as `questions`.
 const REQUIRED_TEXT_KEYS = Object.freeze([
   'lang', 'languageName', 'title', 'heading', 'instructions',
   'dateLabel', 'submit', 'formNote', 'languageSwitchLabel',
@@ -21,7 +21,7 @@ function isNonBlankString(value) {
   return typeof value === 'string' && value.trim() !== '';
 }
 
-/** Throws a clear startup error if a locale file is incomplete. */
+/** Fails at start-up with a clear message if a locale file is missing something. */
 function validateLocale(language, texts, file) {
   const problems = [];
   for (const key of REQUIRED_TEXT_KEYS) {
@@ -39,10 +39,10 @@ function validateLocale(language, texts, file) {
 }
 
 /**
- * Reads and validates <dir>/<language>.json for every language in I18N.LOCALES.
+ * Reads and checks <dir>/<language>.json for every language in I18N.LOCALES.
  * @param {string} [dir]
  * @returns {Promise<Record<string, object>>} e.g. { en: {...}, fr: {...} }
- * @throws {Error} missing file, invalid JSON or missing keys
+ * @throws {Error} if a file is missing, isn't valid JSON or lacks a key
  */
 async function loadLocales(dir = DEFAULT_LOCALES_DIR) {
   const languages = Object.keys(I18N.LOCALES);
@@ -56,9 +56,9 @@ async function loadLocales(dir = DEFAULT_LOCALES_DIR) {
 }
 
 /**
- * ?lang= value -> a supported language key. Case-insensitive and trimmed ("FR" -> "fr").
- * Missing, unsupported, or non-string (an array from ?lang=fr&lang=en) -> the default.
- * Object.hasOwn, not `in`, so "constructor" or "__proto__" are never "supported".
+ * Turns the ?lang= value into a supported language. It ignores case and spaces ("FR" -> "fr").
+ * Anything missing, unsupported or not a string (?lang=fr&lang=en gives an array) gets the default.
+ * Object.hasOwn is used instead of `in` so "constructor" or "__proto__" never count as languages.
  */
 function resolveLanguage(raw) {
   if (typeof raw !== 'string') return I18N.DEFAULT_LANGUAGE;
@@ -67,10 +67,10 @@ function resolveLanguage(raw) {
 }
 
 /**
- * Today's date as text for the language, e.g. "Monday 15 March 2027" / "lundi 15 mars 2027".
- * Pass the REAL instant (new Date()), not a clinic Date: Intl converts the instant
- * into `timeZone` itself. Giving it a clinic Date (UTC fields already shifted to
- * clinic time) together with the clinic time zone would shift it twice.
+ * Today's date written out for the language, e.g. "Monday 15 March 2027" / "lundi 15 mars 2027".
+ * Pass the real instant (new Date()), not a clinic Date. Intl already converts the
+ * instant into `timeZone`, so a clinic Date, whose fields are already in clinic
+ * time, would be shifted twice.
  * @param {Date} instant
  * @param {string} language  a key of I18N.LOCALES
  * @param {string} [timeZone=clinicTimezone()]

@@ -1,6 +1,6 @@
-// Builds the argument for appointmentModel.bookAppointment(). Shared by the
-// booking controller (API) and the waitlist worker, so both book with exactly
-// the same day range, cap, timestamps and reference format.
+// Builds what appointmentModel.bookAppointment() expects. The API and the waitlist
+// worker both use it, so they book with the same day range, cap, timestamps and
+// reference format.
 const { DAILY_CAP } = require('../config/constants');
 const { generateApptRef } = require('./apptRef');
 const { toSqlDateTime, dayRange } = require('./clock');
@@ -10,7 +10,7 @@ const { toSqlDateTime, dayRange } = require('./clock');
  * @param {number} args.patientId
  * @param {number} args.doctorId
  * @param {Date} args.slot            clinic Date of the appointment start
- * @param {number} [args.amountPaid]  omitted = the doctor's fee
+ * @param {number} [args.amountPaid]  left out = the doctor's fee
  * @param {Date} args.now             clinic Date, from clinicNow()
  */
 function buildBookingRequest({ patientId, doctorId, slot, amountPaid, now }) {

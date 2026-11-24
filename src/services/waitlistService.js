@@ -1,5 +1,5 @@
-// Redis waitlist, web-server side: join, read, and the "slot-freed" trigger.
-// The lists are plain Redis lists (FIFO); the worker does the promotions.
+// The web server's side of the Redis waitlist: joining, reading, and queueing the
+// "slot-freed" job. The lists are plain FIFO lists; the worker does the promotions.
 const appointmentModel = require('../models/appointmentModel');
 const auditLogger = require('./auditLogger');
 const queues = require('./queues');
@@ -16,8 +16,8 @@ const REDIS_DOWN_MESSAGE = 'The waitlist is temporarily unavailable (Redis is do
 let store = null;
 
 /**
- * Runs Redis-only work; any Redis failure becomes 503. MySQL calls stay outside,
- * so a database error is never mislabelled as "Redis is down".
+ * Runs Redis-only work and turns any Redis failure into a 503. MySQL calls stay outside
+ * this wrapper, so a database error is never reported as "Redis is down".
  */
 async function withRedis(work) {
   try {
@@ -31,11 +31,11 @@ async function withRedis(work) {
 }
 
 /**
- * Puts a patient on the waitlist for a full slot or a full day.
+ * Adds a patient to the waitlist for a full slot or a full day.
  * @param {{ type: 'slot'|'day', patientId: number, doctorId: number, appointmentDateTime: string }} input
  *   appointmentDateTime is "YYYY-MM-DD HH:mm" (clinic time)
- * @returns {Promise<object>} the entry, its 1-based position and the list it joined
- * @throws {AppError} 409 already on that list / already booked then, 503 Redis down
+ * @returns {Promise<object>} the entry, its position (starting at 1) and the list it joined
+ * @throws {AppError} 409 if already on that list or already booked at that time, 503 if Redis is down
  */
 async function joinWaitlist({ type, patientId, doctorId, appointmentDateTime }) {
   if (type === WAITLIST_TYPE.SLOT) {
@@ -67,7 +67,7 @@ async function joinWaitlist({ type, patientId, doctorId, appointmentDateTime }) 
   };
 }
 
-/** Every waiting, processing and failed entry of one doctor (doctor existence checked by the caller). */
+/** Every waiting, processing and failed entry for one doctor. The caller checks the doctor exists. */
 function getDoctorWaitlist(doctorId) {
   return withRedis(async (waitlist) => {
     const keys = await waitlist.scanKeys(doctorKeyPattern(doctorId));
@@ -78,9 +78,9 @@ function getDoctorWaitlist(doctorId) {
 }
 
 /**
- * Queues a "slot-freed" job so the worker can promote the first waiting patient.
- * Never throws: with Redis down the cancellation still succeeds and this slot gets
- * no automatic promotion until the worker's start-up sweep finds it.
+ * Queues a "slot-freed" job so the worker can promote the first patient waiting.
+ * Never throws. If Redis is down the cancellation still goes through, and the
+ * worker's sweep picks the slot up later.
  * @param {{ doctorId: number, appointmentDateTime: string, freedByAppointmentId: number|null }} data
  * @returns {Promise<boolean>} true if a job was queued
  */

@@ -1,4 +1,4 @@
-// Builds the GET /api/doctors/:id/waitlist body from raw Redis lists. Pure module.
+// Shapes the raw Redis lists into the GET /api/doctors/:id/waitlist response.
 const { WAITLIST_TYPE } = require('../config/constants');
 const { parseWaitlistKey } = require('./waitlistKeys');
 const { parseEntry } = require('./waitlistEntry');
@@ -18,7 +18,7 @@ function toEntries(raws) {
 
 /**
  * @param {number} doctorId
- * @param {{ key: string, raws: string[] }[]} lists  every key of this doctor + its contents
+ * @param {{ key: string, raws: string[] }[]} lists  every key for this doctor and what's in it
  * @param {string[]} failedRaws  the whole WAITLIST_KEYS.FAILED list
  */
 function buildDoctorWaitlistView(doctorId, lists, failedRaws) {

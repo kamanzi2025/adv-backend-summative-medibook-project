@@ -1,19 +1,18 @@
-// Producer side of BullMQ plus the web server's Redis connection (also used by
-// the waitlist). Everything is created lazily: requiring this module opens no
-// connection, so a server that never touches Redis stays quiet and unit tests
-// stay free of Redis.
+// The BullMQ queues the web server adds jobs to, plus its Redis connection, which
+// the waitlist uses too. Nothing connects until it's first used, so requiring this
+// file opens no connection and the unit tests never need Redis.
 const { Queue } = require('bullmq');
 const { createRedisConnection } = require('../config/redis');
 const { QUEUE_JOB_OPTIONS } = require('../config/constants');
 
-// The first command after start-up may wait this long for the connection to come
-// up; afterwards a Redis outage makes commands fail immediately.
+// The first command after start-up can wait this long for Redis to connect.
+// After that, if Redis goes down, commands fail straight away.
 const REDIS_READY_TIMEOUT_MS = 1500;
-// Completed jobs kept per queue for inspection (failed jobs are always kept).
+// How many finished jobs to keep per queue for checking. Failed jobs are always kept.
 const COMPLETED_JOBS_KEPT = 1000;
 
-// ioredis connection states in which waiting for 'ready' is pointless: the last
-// attempt already failed (or the client was closed), so fail fast instead.
+// Connection states where waiting for 'ready' is pointless because the last
+// attempt already failed or the client was closed. We fail fast instead.
 const DOWN_STATES = new Set(['reconnecting', 'close', 'end']);
 
 const DEFAULT_JOB_OPTIONS = Object.freeze({
@@ -26,15 +25,15 @@ const DEFAULT_JOB_OPTIONS = Object.freeze({
 let connection = null;
 const queues = new Map();
 
-/** The shared server-role connection (fail-fast), created on first use. */
+/** The web server's shared Redis connection (fails fast), created the first time it's needed. */
 function getRedis() {
   if (!connection) connection = createRedisConnection({ role: 'server' });
   return connection;
 }
 
 /**
- * Resolves once Redis is usable, rejects fast if it is not. BullMQ's Queue waits
- * for 'ready' without any limit, so this bound is what keeps a request from hanging.
+ * Resolves once Redis can be used and rejects quickly if it can't. BullMQ's Queue
+ * would wait for 'ready' forever, so this time limit is what stops a request hanging.
  */
 function whenRedisReady() {
   const redis = getRedis();
@@ -58,8 +57,8 @@ function whenRedisReady() {
 function getQueue(name) {
   if (!queues.has(name)) {
     const queue = new Queue(name, { connection: getRedis(), defaultJobOptions: DEFAULT_JOB_OPTIONS });
-    // Connection problems are already reported once by config/redis.js; without a
-    // listener an 'error' event would crash the process.
+    // config/redis.js already reports connection problems once. The empty listener is
+    // still needed, because an 'error' event with no listener crashes the process.
     queue.on('error', () => {});
     queues.set(name, queue);
   }
@@ -67,7 +66,7 @@ function getQueue(name) {
 }
 
 /**
- * Adds one job. Rejects (fast) if Redis is unavailable; callers decide what that means.
+ * Adds one job. Rejects quickly if Redis is unavailable; the caller decides what that means.
  * @returns {Promise<import('bullmq').Job>}
  */
 async function addJob(queueName, data) {
@@ -75,7 +74,7 @@ async function addJob(queueName, data) {
   return getQueue(queueName).add(queueName, data);
 }
 
-/** Graceful shutdown: closes every producer queue, then the shared connection. */
+/** On shutdown: close every queue, then the shared connection. */
 async function closeQueues() {
   await Promise.all([...queues.values()].map((queue) => queue.close()));
   queues.clear();
@@ -90,7 +89,7 @@ async function closeQueues() {
   }
 }
 
-/** Short reason for a log line. */
+/** A short reason to put in a log line. */
 function redisErrorReason(err) {
   return err.code || err.message;
 }

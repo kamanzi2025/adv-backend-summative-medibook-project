@@ -1,11 +1,11 @@
-// The clinic clock. The ONLY source of "now" / "today" for the whole app.
+// The clinic clock. Everything in the app gets "now" and "today" from here.
 //
-// Convention: a "clinic Date" is a JS Date whose UTC fields hold the clinic's
-// wall-clock time (e.g. 09:00 in Johannesburg is stored as 09:00Z). Doing all
-// arithmetic in UTC fields means the result never depends on the time zone of
-// the PC, the database server or the CI machine.
+// A "clinic Date" is a JS Date whose UTC fields hold the clinic's wall-clock time,
+// so 09:00 in Johannesburg is stored as 09:00Z. Doing all the date maths on the UTC
+// fields means the result never depends on the time zone of my laptop, the MySQL
+// server or whatever machine runs the tests.
 //
-// Pure module: no db/redis imports, safe for unit tests.
+// No database or Redis imports, so the unit tests can use it.
 const { clinicTimezone } = require('../config/settings');
 
 const MS_PER_HOUR = 60 * 60 * 1000;
@@ -36,8 +36,8 @@ function getFormatter(timeZone) {
 }
 
 /**
- * Current clinic wall-clock time as a "clinic Date".
- * @param {Date} [instant=new Date()]  the real moment (injectable for tests)
+ * The clinic's current wall-clock time, as a clinic Date.
+ * @param {Date} [instant=new Date()]  the real moment (tests pass a fixed one)
  * @param {string} [timeZone=clinicTimezone()]
  * @returns {Date}
  */
@@ -58,8 +58,9 @@ function clinicNow(instant = new Date(), timeZone = clinicTimezone()) {
   );
 }
 
-// Builds a clinic Date and rejects impossible values (2027-02-30, 24:00, 12:60):
-// Date.UTC silently rolls them over, so the fields must survive a round trip.
+// Builds a clinic Date and refuses impossible values like 2027-02-30, 24:00 or 12:60.
+// Date.UTC quietly rolls those over to the next day or hour, so the fields have
+// to come back out unchanged.
 function buildClinicDate(year, month, day, hour = 0, minute = 0) {
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute));
   const exact = date.getUTCFullYear() === year
@@ -71,8 +72,8 @@ function buildClinicDate(year, month, day, hour = 0, minute = 0) {
 }
 
 /**
- * Strict "YYYY-MM-DD HH:mm" (clinic time) -> clinic Date, or null if the text
- * has another shape (seconds, "T", missing zero) or is not a real date/time.
+ * Parses exactly "YYYY-MM-DD HH:mm" (clinic time) into a clinic Date. Returns null for
+ * any other shape (seconds, a "T", a missing zero) or a date that doesn't exist.
  */
 function parseClinicDateTime(text) {
   const match = typeof text === 'string' ? DATETIME_PATTERN.exec(text) : null;
@@ -81,7 +82,7 @@ function parseClinicDateTime(text) {
   return buildClinicDate(year, month, day, hour, minute);
 }
 
-/** Strict "YYYY-MM-DD" -> clinic Date at 00:00, or null. */
+/** Parses exactly "YYYY-MM-DD" into a clinic Date at 00:00, or returns null. */
 function parseClinicDate(text) {
   const match = typeof text === 'string' ? DATE_PATTERN.exec(text) : null;
   if (!match) return null;
@@ -89,17 +90,17 @@ function parseClinicDate(text) {
   return buildClinicDate(year, month, day);
 }
 
-/** "YYYY-MM-DD HH:mm:ss", for DATETIME ? parameters. */
+/** "YYYY-MM-DD HH:mm:ss", the format for DATETIME ? parameters. */
 function toSqlDateTime(clinicDate) {
   return clinicDate.toISOString().slice(0, 19).replace('T', ' ');
 }
 
-/** "YYYY-MM-DD", for DATE ? parameters. */
+/** "YYYY-MM-DD", the format for DATE ? parameters. */
 function toSqlDate(clinicDate) {
   return clinicDate.toISOString().slice(0, 10);
 }
 
-/** "YYYY-MM-DD HH:mm", the API's appointment time format. */
+/** "YYYY-MM-DD HH:mm", the format the API uses for appointment times. */
 function formatClinicDateTime(clinicDate) {
   return toSqlDateTime(clinicDate).slice(0, 16);
 }
@@ -109,8 +110,8 @@ function addDays(clinicDate, days) {
 }
 
 /**
- * The calendar day containing clinicDate as a half-open range [start, end),
- * for sargable SQL: appt_datetime >= start AND appt_datetime < end.
+ * The day containing clinicDate, as a start and an end (the next midnight, not included).
+ * The SQL then compares appt_datetime >= start AND appt_datetime < end, which can use the index.
  */
 function dayRange(clinicDate) {
   const midnight = `${toSqlDate(clinicDate)} 00:00:00`;

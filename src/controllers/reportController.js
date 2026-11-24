@@ -1,5 +1,5 @@
-// Clinic-wide reports. The SQL in reportModel produces the results; this layer only
-// wraps them in the response envelope. No try/catch: Express 5 forwards errors.
+// Clinic-wide reports. The SQL in reportModel does all the work; this file only
+// wraps the rows in { data }. Express 5 forwards errors, so no try/catch.
 const reportModel = require('../models/reportModel');
 const { clinicNow, formatClinicDateTime } = require('../utils/clock');
 const { DAILY_CAP, BUSY_THRESHOLD } = require('../config/constants');

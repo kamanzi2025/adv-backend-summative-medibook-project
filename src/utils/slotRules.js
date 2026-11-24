@@ -1,4 +1,4 @@
-// The clinic's slot rules as one pure function (no DB, no Redis, `now` injected).
+// The clinic's slot rules as one pure function. "now" is passed in so the tests can fix it.
 const { WORKING_HOURS_START, WORKING_HOURS_END, SLOT_MINUTES } = require('../config/constants');
 const { formatClinicDateTime } = require('./clock');
 
@@ -17,13 +17,13 @@ function minutesToTime(totalMinutes) {
   return `${hours}:${minutes}`;
 }
 
-const FIRST_SLOT_START = timeToMinutes(WORKING_HOURS_START); // 09:00
-const LAST_SLOT_START = timeToMinutes(WORKING_HOURS_END) - SLOT_MINUTES; // 16:30
+const FIRST_SLOT_START = timeToMinutes(WORKING_HOURS_START);
+const LAST_SLOT_START = timeToMinutes(WORKING_HOURS_END) - SLOT_MINUTES; // 16:30, the last slot that still ends by closing time
 
 /**
- * Every clinic rule the requested slot breaks (empty array = bookable).
+ * Every clinic rule the requested slot breaks. An empty array means it can be booked.
  * @param {Date} slot  clinic Date of the requested start time
- * @param {Date} now   clinic Date for "now" (pass clinicNow(); tests pass a fixed value)
+ * @param {Date} now   clinic Date for "now" (clinicNow() in the app, a fixed value in tests)
  * @returns {string[]}
  */
 function slotRuleViolations(slot, now) {
@@ -48,7 +48,7 @@ function slotRuleViolations(slot, now) {
   return violations;
 }
 
-/** All bookable start times of a day, e.g. ["09:00", "09:30", ..., "16:30"]. */
+/** Every start time in a day: ["09:00", "09:30", ..., "16:30"]. */
 function slotStartTimes() {
   const times = [];
   for (let minute = FIRST_SLOT_START; minute <= LAST_SLOT_START; minute += SLOT_MINUTES) {

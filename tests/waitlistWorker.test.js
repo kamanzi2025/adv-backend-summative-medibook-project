@@ -1,4 +1,4 @@
-// The real waitlist store + processors, running on an in-memory Redis fake.
+// The real waitlist store and processors, running against a fake in-memory Redis.
 const { createWaitlistStore } = require('../src/utils/waitlistStore');
 const { createSlotFreedProcessor } = require('../src/workers/processors/slotFreedProcessor');
 const { createConfirmationProcessor } = require('../src/workers/processors/confirmationProcessor');
@@ -12,7 +12,7 @@ const DAY = 'waitlist:doctor:2:day:2027-05-03';
 const FAILED = 'waitlist:failed';
 const NOW = parseClinicDateTime('2027-05-01 12:00');
 
-/** Just the list commands the store uses; waitlistJoin / waitlistMove mirror the Lua scripts. */
+/** Only the list commands the store uses. waitlistJoin and waitlistMove copy what the Lua scripts do. */
 function createFakeRedis() {
   const lists = new Map();
   const list = (key) => {

@@ -1,7 +1,7 @@
 const healthModel = require('../models/healthModel');
 const { HTTP_STATUS } = require('../config/constants');
 
-/** GET /api/health: reports whether the API can reach MySQL. */
+/** GET /api/health: can the API reach MySQL? */
 async function getHealth(req, res) {
   let database = 'up';
   try {

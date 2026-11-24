@@ -1,11 +1,11 @@
-// Refund policy: > 48h -> 100%, 24h..48h inclusive -> 50%, < 24h -> 0%.
-// Pure function only, no MySQL/Redis. "now" is FIXED, never the real clock.
+// Refund policy: more than 48h -> 100%, 24h to 48h inclusive -> 50%, under 24h -> 0%.
+// Only the pure function is tested, and "now" is always a fixed date, never the real clock.
 const { calculateRefund, refundPercentFor } = require('../src/utils/refund');
 
 const MS_PER_MINUTE = 60 * 1000;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
 
-// Clinic Date convention: UTC fields hold clinic wall-clock time.
+// A clinic Date keeps the clinic's wall-clock time in its UTC fields.
 const NOW = new Date(Date.UTC(2027, 2, 10, 9, 0)); // 2027-03-10 09:00 clinic time
 
 function appointmentIn(hours, minutes = 0) {
@@ -64,7 +64,7 @@ describe('refundPercentFor: boundaries on exact milliseconds', () => {
 
 describe('calculateRefund: amounts in integer cents, matching MySQL ROUND(x, 2)', () => {
   test.each([
-    // amountPaid, expected 50% refund, reason
+    // amountPaid, the expected 50% refund, and why
     [99.99, 50, '9999 cents * 50% = 4999.5 -> 5000 (half rounds up, like MySQL ROUND)'],
     [150, 75, '15000 cents * 50% = 7500'],
     [120.01, 60.01, '12001 cents * 50% = 6000.5 -> 6001'],

@@ -1,7 +1,7 @@
-// DEMO 2: a doctor-day with room for only 2 more bookings receives 6 simultaneous
-// requests for 6 DIFFERENT free slots. Expected: exactly two 201, four 409
-// "day full", and the day ends with exactly DAILY_CAP (12) bookings, never 13+.
-// Run with the API started (npm start):  npm run demo:daily-cap
+// Demo 2: the doctor has room for 2 more bookings that day, and 6 requests for
+// 6 different free slots arrive at once. Only 2 should get a 201, the other 4 get
+// 409 "day full", and the day must end on exactly DAILY_CAP (12) bookings.
+// Start the API first (npm start), then run: npm run demo:daily-cap
 const { api, ensureDemoPatients, findEmptyDay, bookedCount, tally, BASE_URL } = require('./lib/demoClient');
 const { DAILY_CAP } = require('../src/config/constants');
 const { slotStartTimes } = require('../src/utils/slotRules');
@@ -12,8 +12,8 @@ const ROOM_LEFT = 2;
 
 (async () => {
   console.info(`API: ${BASE_URL}`);
-  const times = slotStartTimes(); // 16 start times, 09:00-16:30
-  const prefill = DAILY_CAP - ROOM_LEFT; // 10
+  const times = slotStartTimes(); // 16 start times, 09:00 to 16:30
+  const prefill = DAILY_CAP - ROOM_LEFT;
   const patients = await ensureDemoPatients(times.length);
   const day = await findEmptyDay(DOCTOR_ID, START_SEARCH);
 
@@ -26,7 +26,7 @@ const ROOM_LEFT = 2;
   }
   console.info(`Booked now: ${await bookedCount(DOCTOR_ID, day)} of ${DAILY_CAP}`);
 
-  const freeTimes = times.slice(prefill); // 6 free slots
+  const freeTimes = times.slice(prefill);
   console.info(`Firing ${freeTimes.length} simultaneous bookings for DIFFERENT free slots: ${freeTimes.join(', ')} ...`);
   const responses = await Promise.all(
     freeTimes.map((time, i) => api('POST', '/api/appointments', {

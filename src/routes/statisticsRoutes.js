@@ -1,4 +1,4 @@
-// Mounted at /api/doctors/:id/statistics. mergeParams exposes :id from the mount path.
+// Mounted at /api/doctors/:id/statistics. mergeParams lets this router see :id.
 const { Router } = require('express');
 const statisticsController = require('../controllers/statisticsController');
 const methodNotAllowed = require('../middleware/methodNotAllowed');

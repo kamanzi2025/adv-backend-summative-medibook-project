@@ -8,7 +8,7 @@ const { escapeHtml, renderFeedbackPage } = require('../src/utils/feedbackPage');
 
 const ZONE = 'Africa/Johannesburg'; // UTC+2, no daylight saving
 
-// README Part G, verbatim.
+// Copied word for word from the brief (Part G).
 const README_QUESTIONS = [
   'Which topic in this course did you find most challenging, and why?',
   'Describe one concept you understood only after the practical assignments. What made it click?',

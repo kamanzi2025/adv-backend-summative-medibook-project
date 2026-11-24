@@ -1,4 +1,4 @@
-// parseDateQuery: the shared ?date= / ?from= validator. Pure, no MySQL/Redis.
+// parseDateQuery, the shared ?date= / ?from= check. No MySQL or Redis needed.
 const { parseDateQuery } = require('../src/validators/common');
 const { parseClinicDate, toSqlDate } = require('../src/utils/clock');
 const AppError = require('../src/utils/AppError');

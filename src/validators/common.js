@@ -1,5 +1,5 @@
-// Generic, pure validation building blocks (no DB, no Redis).
-// A "field rule" is a function raw => { value } | { error }.
+// Small validation pieces shared by the validators. No database or Redis.
+// A "field rule" is a function that takes the raw value and returns { value } or { error }.
 const AppError = require('../utils/AppError');
 const { parseClinicDate } = require('../utils/clock');
 const { ID_MAX, MONEY_MAX, PAGINATION } = require('../config/constants');
@@ -12,18 +12,18 @@ function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-// Counts characters the way MySQL's CHAR_LENGTH does for utf8mb4
-// (an emoji is 1 character, not 2 UTF-16 code units).
+// Counts characters the way MySQL's CHAR_LENGTH does for utf8mb4, so an emoji
+// counts as 1 character rather than 2 UTF-16 code units.
 function charLength(text) {
   return [...text].length;
 }
 
 /**
- * Trimmed, non-blank string of at most maxLength characters.
+ * A trimmed, non-blank string of at most maxLength characters.
  * @param {number} maxLength
  * @param {object} [options]
  * @param {(s: string) => string} [options.normalize]  e.g. lower-case an email
- * @param {RegExp} [options.pattern]   checked after normalizing
+ * @param {RegExp} [options.pattern]   checked after normalize
  * @param {string} [options.patternMessage]
  */
 function text(maxLength, { normalize, pattern, patternMessage } = {}) {
@@ -39,7 +39,7 @@ function text(maxLength, { normalize, pattern, patternMessage } = {}) {
 }
 
 /**
- * A JSON number with at most 2 decimal places that fits DECIMAL(10,2).
+ * A JSON number with at most 2 decimal places that fits in DECIMAL(10,2).
  * @param {object} [options]
  * @param {boolean} [options.allowZero=false]  true: >= 0 (a free visit); false: > 0
  */
@@ -55,7 +55,7 @@ function money({ allowZero = false } = {}) {
   };
 }
 
-/** A JSON integer id (a number, not a string) that fits INT UNSIGNED. */
+/** A JSON integer id (a number, not a string) that fits in INT UNSIGNED. */
 function positiveInteger() {
   return (raw) => {
     if (!Number.isInteger(raw) || raw < 1 || raw > ID_MAX) return { error: 'must be a positive integer' };
@@ -63,19 +63,18 @@ function positiveInteger() {
   };
 }
 
-/** A JSON true/false. */
+/** JSON true or false. */
 function booleanValue() {
   return (raw) => (typeof raw === 'boolean' ? { value: raw } : { error: 'must be true or false' });
 }
 
 /**
- * Validates a request body against a map of field rules.
- * - rejects anything that isn't a JSON object
- * - rejects unknown fields
- * - partial=false: every field is required (create), except those in `optional`
- * - partial=true:  fields are optional but at least one is required (PATCH)
- * Collects EVERY problem before failing, so the client can fix them all at once.
- * @returns {object} the cleaned values (only the fields that were sent)
+ * Checks a request body against a set of field rules.
+ * It rejects anything that isn't a JSON object, and any field it doesn't know.
+ * With partial=false (create) every field is required, apart from those in `optional`.
+ * With partial=true (PATCH) every field is optional, but at least one must be sent.
+ * It collects every problem before failing, so the client can fix them all in one go.
+ * @returns {object} the cleaned values, only for the fields that were sent
  * @throws {AppError} 400 with details [{ field, message }]
  */
 function validateBody(body, rules, { partial = false, optional = [], entity = 'request body' } = {}) {
@@ -118,7 +117,7 @@ function validateBody(body, rules, { partial = false, optional = [], entity = 'r
 }
 
 /**
- * Route/query id: a positive integer that fits INT UNSIGNED.
+ * An id from the URL or query string: a positive integer that fits in INT UNSIGNED.
  * @throws {AppError} 400
  */
 function parseId(raw, name = 'id') {
@@ -132,7 +131,7 @@ function parseId(raw, name = 'id') {
 }
 
 /**
- * ?limit=&offset= with safe defaults and a hard maximum.
+ * ?limit=&offset=, with defaults and a maximum page size.
  * @throws {AppError} 400 listing every bad parameter
  */
 function parsePagination(query = {}) {
@@ -160,13 +159,13 @@ function parsePagination(query = {}) {
 }
 
 /**
- * An optional ?<field>=YYYY-MM-DD query value (e.g. ?date= for a doctor's day,
- * ?from= for statistics). Missing -> `today`. Anything else that isn't one real
- * "YYYY-MM-DD" date (wrong shape, 2027-02-30, or an array from ?from=a&from=b) -> 400.
+ * An optional ?<field>=YYYY-MM-DD value, like ?date= for a doctor's day or ?from= for
+ * statistics. If it's missing we use `today`. Anything that isn't one real date
+ * (wrong shape, 2027-02-30, or an array from ?from=a&from=b) is a 400.
  * @param {unknown} raw   req.query[field]
  * @param {Date} today    clinic Date (clinicNow())
- * @param {string} field  query parameter name, for the error message
- * @returns {Date} clinic Date; only its calendar day is used
+ * @param {string} field  the parameter name, for the error message
+ * @returns {Date} clinic Date; only the day part matters
  * @throws {AppError} 400
  */
 function parseDateQuery(raw, today, field) {

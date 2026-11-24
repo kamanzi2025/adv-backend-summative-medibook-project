@@ -1,14 +1,14 @@
 # MediBook Schema Diagram (Mermaid backup)
 
-Equivalent to [`schema.dbml`](schema.dbml) and [`../database/schema.sql`](../database/schema.sql):
-same 3 tables, columns, types and constraint names. GitHub and VS Code
-(with a Mermaid extension) render this directly. The repo-root `schema-diagram.png` is rendered
-from [`schema-diagram.html`](schema-diagram.html) (render command at the top of that file).
+This is the same design as [`schema.dbml`](schema.dbml) and [`../database/schema.sql`](../database/schema.sql),
+with the same 3 tables, columns, types and constraint names, drawn in Mermaid so GitHub and VS Code
+(with a Mermaid extension) can show it without any other tool. The main diagram is `schema-diagram.png`
+in the project root, which is a screenshot of [`schema-diagram.html`](schema-diagram.html). The command
+to re-render it is at the top of that file.
 
-> Mermaid type names can't contain spaces or commas, so the diagram writes
-> `INT_UNSIGNED` for `INT UNSIGNED`, `TINYINT_UNSIGNED` for `TINYINT UNSIGNED`,
-> `DECIMAL_10_2` for `DECIMAL(10,2)` and `ENUM_STATUS` for `ENUM('BOOKED','CANCELLED')`.
-> The exact MySQL type is repeated at the start of every comment.
+Mermaid doesn't allow spaces or commas in a type name, so the diagram writes `INT_UNSIGNED` for
+`INT UNSIGNED`, `TINYINT_UNSIGNED` for `TINYINT UNSIGNED`, `DECIMAL_10_2` for `DECIMAL(10,2)` and
+`ENUM_STATUS` for `ENUM('BOOKED','CANCELLED')`. Each column's comment starts with the real MySQL type.
 
 ```mermaid
 erDiagram
@@ -58,16 +58,17 @@ UNIQUE uq_appt_patient_active_slot (patient_id, active_slot)
 
 | Row status | `active_slot` | Effect on the UNIQUE index |
 |---|---|---|
-| `BOOKED` | = `appt_datetime` | A second BOOKED row for the same doctor + time is **rejected** (ERROR 1062) |
-| `CANCELLED` | `NULL` | NULLs never collide, so the cancelled record is **kept** and the slot can be **booked again** |
+| `BOOKED` | = `appt_datetime` | A second booked row for the same doctor and time is rejected (ERROR 1062) |
+| `CANCELLED` | `NULL` | Two NULLs never count as equal, so the cancelled row stays and the slot can be booked again |
 
-## Two deliberate design notes (3NF)
+## Two things that look like they break 3NF, and why they don't
 
-- **`refund_amount`** could be calculated as `amount_paid × refund_percent / 100`. It is stored on purpose as a
-  financial snapshot of the money actually returned, written in the same UPDATE as `refund_percent`, and
-  `chk_appt_refund_matches_percent` makes it impossible for the two to disagree, so it can never be inconsistent.
-- **`appt_ref`** contains the appointment date (`AP-YYYYMMDD-XXXX`) only as part of a printed label.
-  `appt_datetime` is the authoritative slot; `appt_ref` is a UNIQUE candidate key that no logic depends on.
+`refund_amount` could be worked out as `amount_paid × refund_percent / 100`. I store it anyway, as a record
+of the money that was actually paid back. It's written in the same UPDATE as `refund_percent`, and
+`chk_appt_refund_matches_percent` won't let the two disagree, so it can't become inconsistent.
+
+`appt_ref` has the appointment date in it (`AP-YYYYMMDD-XXXX`), but only as part of a printed label.
+`appt_datetime` is the real slot. `appt_ref` is just a unique reference, and no logic reads the date out of it.
 
 ## Every constraint
 
@@ -106,5 +107,5 @@ UNIQUE uq_appt_patient_active_slot (patient_id, active_slot)
 NOT NULL: every column except `appointments.active_slot`, `cancelled_at`,
 `refund_percent` and `refund_amount`.
 
-Cardinality: one patient has zero or many appointments; one doctor has zero or many
-appointments; every appointment has exactly one patient and exactly one doctor.
+Cardinality: a patient can have zero or more appointments, and so can a doctor. Every
+appointment has exactly one patient and exactly one doctor.

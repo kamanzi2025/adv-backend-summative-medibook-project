@@ -1,6 +1,6 @@
-// "slot-freed" job: promote the first waiting patient into the freed slot.
-// Every dependency is injected, so the whole algorithm runs in unit tests with an
-// in-memory Redis fake and a scripted bookAppointment.
+// The "slot-freed" job: move the first patient on the waitlist into the freed slot.
+// Everything it uses is passed in, so the tests can run the whole thing with a fake
+// in-memory Redis and a scripted bookAppointment.
 const { AUDIT_EVENT, WAITLIST_TYPE } = require('../../config/constants');
 const { parseClinicDateTime, toSqlDate } = require('../../utils/clock');
 const { slotRuleViolations } = require('../../utils/slotRules');
@@ -36,7 +36,7 @@ function createSlotFreedProcessor({ store, bookAppointment, onAppointmentBooked,
     });
   }
 
-  /** The slot itself can no longer be booked (past / outside the rules): its list is dead. */
+  /** The slot itself can't be booked any more (it's in the past or breaks a rule), so its whole list fails. */
   async function failWholeList(list, reason, appointmentDateTime) {
     let failed = 0;
     for (let raw = await store.takeNext(list.key); raw !== null; raw = await store.takeNext(list.key)) {
@@ -58,8 +58,8 @@ function createSlotFreedProcessor({ store, bookAppointment, onAppointmentBooked,
 
     const violations = slotRuleViolations(slot, now());
     if (violations.length > 0) {
-      // Nobody can ever get this exact slot, so its own list is failed. The day list
-      // is left alone: a later slot that day may still free up for those patients.
+      // Nobody can ever get this exact slot, so its own list is failed. The day list is
+      // left alone, since another slot that day might still free up for those patients.
       const reason = `freed slot is not bookable: ${violations.join('; ')}`;
       const failed = await failWholeList(slotList, reason, appointmentDateTime);
       return { promoted: false, reason, failed };
@@ -84,7 +84,7 @@ function createSlotFreedProcessor({ store, bookAppointment, onAppointmentBooked,
 
         const decision = classifyPromotionResult(result);
         if (decision === PROMOTION.BOOKED) {
-          // Forget the entry only now: the booking has COMMITTED.
+          // Only remove the entry now that the booking has committed.
           await store.complete(list.key, raw);
           const { appointment } = result;
           await audit(AUDIT_EVENT.WAITLIST_PROMOTED, {
@@ -107,7 +107,7 @@ function createSlotFreedProcessor({ store, bookAppointment, onAppointmentBooked,
           continue;
         }
 
-        // SLOT_GONE and TRANSIENT: not this patient's fault, keep their place.
+        // SLOT_GONE or TRANSIENT: not the patient's fault, so they keep their place.
         await store.returnToFront(list.key, raw);
         if (decision === PROMOTION.SLOT_GONE) {
           return { promoted: false, reason, patientId: entry.patientId };

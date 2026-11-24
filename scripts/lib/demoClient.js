@@ -1,5 +1,5 @@
-// Small HTTP helpers shared by the demo scripts. They talk to the RUNNING API
-// (start it first with `npm start`); they never touch the database directly.
+// HTTP helpers for the demo scripts. They only call the running API, the same
+// way a real client would, and never touch the database.
 require('dotenv').config();
 
 const BASE_URL = process.env.API_URL || `http://localhost:${process.env.PORT || 3000}`;
@@ -23,7 +23,7 @@ async function api(method, path, body) {
   return { status: response.status, body: text ? JSON.parse(text) : null };
 }
 
-/** Returns `count` patient ids, creating demo patients that don't exist yet. */
+/** Returns `count` patient ids. Demo patients that don't exist yet are created. */
 async function ensureDemoPatients(count) {
   const existing = new Map();
   for (let offset = 0; ; offset += PAGE_SIZE) {
@@ -50,7 +50,7 @@ async function ensureDemoPatients(count) {
   return ids;
 }
 
-/** First date on/after `fromDate` where the doctor has no appointments at all. */
+/** The first date from `fromDate` onwards on which the doctor has no appointments. */
 async function findEmptyDay(doctorId, fromDate) {
   const date = new Date(`${fromDate}T00:00:00Z`);
   for (;;) {

@@ -1,14 +1,14 @@
-// Pure decision logic for waitlist promotions (no Redis, no DB).
+// How the worker decides what to do after a promotion attempt. No Redis or database here.
 const { BOOKING_OUTCOME, APPOINTMENT_STATUS, DAILY_CAP, WAITLIST_TYPE } = require('../config/constants');
 const { parseClinicDateTime } = require('./clock');
 const { slotRuleViolations, slotStartTimes } = require('./slotRules');
 
-// What the worker does with the entry it took from the waitlist.
+// The four things that can happen to the entry the worker took off the list.
 const PROMOTION = Object.freeze({
-  BOOKED: 'BOOKED', //       done: forget the entry, one freed slot = one promotion
-  PERMANENT: 'PERMANENT', // this patient can never get it: move to waitlist:failed, try the next one
-  SLOT_GONE: 'SLOT_GONE', // the freed slot was re-taken meanwhile: patient back to the front, stop
-  TRANSIENT: 'TRANSIENT', // a glitch (DB down, deadlock): patient back to the front, retry the job
+  BOOKED: 'BOOKED', // the patient got the slot: remove the entry (one freed slot, one promotion)
+  PERMANENT: 'PERMANENT', // this patient can never get it: move them to waitlist:failed and try the next one
+  SLOT_GONE: 'SLOT_GONE', // someone took the slot in the meantime: patient goes back to the front, stop here
+  TRANSIENT: 'TRANSIENT', // a temporary problem (DB down, deadlock): back to the front and retry the job
 });
 
 const DECISION_BY_OUTCOME = Object.freeze({
@@ -36,16 +36,16 @@ function isOutcome(value) {
 }
 
 /**
- * @param {object|Error} resultOrError  bookAppointment()'s result, or what it threw
+ * @param {object|Error} resultOrError  what bookAppointment() returned, or what it threw
  * @returns {'BOOKED'|'PERMANENT'|'SLOT_GONE'|'TRANSIENT'}
- *   Anything that is not a known outcome is TRANSIENT: the patient keeps their place.
+ *   Anything unexpected counts as TRANSIENT, so the patient keeps their place.
  */
 function classifyPromotionResult(resultOrError) {
   if (!isOutcome(resultOrError)) return PROMOTION.TRANSIENT;
   return DECISION_BY_OUTCOME[resultOrError.outcome] || PROMOTION.TRANSIENT;
 }
 
-/** Readable reason for the audit log and waitlist:failed. */
+/** A readable reason for the audit log and for waitlist:failed. */
 function promotionFailureReason(resultOrError) {
   if (isOutcome(resultOrError)) {
     return REASON_BY_OUTCOME[resultOrError.outcome] || `unexpected booking outcome ${resultOrError.outcome}`;
@@ -55,12 +55,13 @@ function promotionFailureReason(resultOrError) {
 }
 
 /**
- * Waitlist sweep: which slot should get a "slot-freed" job for one waiting list?
- * Recovers promotions whose job was lost (e.g. a cancellation while Redis was down).
- * @param {object} list  parseWaitlistKey() result of a waiting (non-processing) list
+ * For the sweep: which slot, if any, should get a "slot-freed" job for this list?
+ * This is how a promotion whose job got lost (say, a cancellation while Redis was
+ * down) still happens.
+ * @param {object} list  parseWaitlistKey() result for a waiting (not processing) list
  * @param {object[]} dayAppointments  the doctor's appointments that day (findByDoctorBetween)
  * @param {Date} now  clinic Date
- * @returns {string|null} "YYYY-MM-DD HH:mm" of a free, bookable slot, or null
+ * @returns {string|null} "YYYY-MM-DD HH:mm" of a free slot that can be booked, or null
  */
 function sweepSlotFor(list, dayAppointments, now) {
   const booked = new Set(dayAppointments

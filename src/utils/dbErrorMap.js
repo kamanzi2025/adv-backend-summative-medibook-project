@@ -1,5 +1,5 @@
-// Translates known MySQL errors into safe HTTP answers. Pure: it only reads
-// err.code / err.sqlMessage. The constraint names come from database/schema.sql.
+// Turns the MySQL errors we expect into safe HTTP answers. It only looks at
+// err.code and err.sqlMessage. The constraint names come from database/schema.sql.
 const { HTTP_STATUS } = require('../config/constants');
 
 const CONSTRAINT_MESSAGES = Object.freeze({
@@ -9,38 +9,38 @@ const CONSTRAINT_MESSAGES = Object.freeze({
   uq_appt_patient_active_slot: { field: 'datetime', message: 'This patient already has an appointment at that time' },
 });
 
-// Deleting a row that other rows still point to (ON DELETE RESTRICT). MySQL sends
-// ER_ROW_IS_REFERENCED_2 (with the constraint name) to users who may read the child
-// table's definition, and ER_ROW_IS_REFERENCED (1217, no name) to a least-privilege
-// user like medibook_user. Both mean the same thing, so both are matched here.
+// Deleting a row that other rows still point to (ON DELETE RESTRICT). A user who
+// can read the child table's definition gets ER_ROW_IS_REFERENCED_2, which names the
+// constraint. A least-privilege user like medibook_user gets ER_ROW_IS_REFERENCED
+// (1217) with no name. They mean the same thing, so both are matched.
 const ROW_REFERENCED_CODES = new Set(['ER_ROW_IS_REFERENCED', 'ER_ROW_IS_REFERENCED_2']);
 
-// Errors that mean "the database is unreachable", not "the request was wrong".
+// These mean the database can't be reached, not that the request was wrong.
 const UNAVAILABLE_CODES = new Set([
   'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'PROTOCOL_CONNECTION_LOST',
   'ER_ACCESS_DENIED_ERROR', 'ER_BAD_DB_ERROR', 'ER_CON_COUNT_ERROR',
 ]);
 
-// Lock conflicts that are already retried by the booking model; if they still
-// happen after the retries, the client is asked to try again.
+// The booking model already retries these lock errors. If one still gets this
+// far, the client is told to try again.
 const BUSY_CODES = new Set(['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT']);
 
 /**
- * Name of the UNIQUE key behind an ER_DUP_ENTRY error, e.g. "uq_patient_email".
- * MySQL's message: "Duplicate entry 'x' for key 'patients.uq_patient_email'"
+ * The UNIQUE key behind an ER_DUP_ENTRY error, e.g. "uq_patient_email".
+ * MySQL's message looks like: "Duplicate entry 'x' for key 'patients.uq_patient_email'"
  */
 function duplicateKeyName(err) {
   const match = (err && err.sqlMessage ? err.sqlMessage : '').match(/for key '(?:[^.']+\.)?([^']+)'/);
   return match ? match[1] : null;
 }
 
-/** True if a DELETE failed because other rows still reference the row (FK RESTRICT). */
+/** True if a DELETE failed because other rows still point at this one (FK RESTRICT). */
 function isRowReferenced(err) {
   return Boolean(err) && ROW_REFERENCED_CODES.has(err.code);
 }
 
 function constraintFromCheck(sqlMessage = '') {
-  // "Check constraint 'chk_doctor_fee_positive' is violated."
+  // MySQL's message looks like: "Check constraint 'chk_doctor_fee_positive' is violated."
   const match = sqlMessage.match(/constraint '([^']+)'/i);
   return match ? match[1] : null;
 }
@@ -52,13 +52,13 @@ function withDetails(status, known, fallbackMessage) {
 
 /**
  * @param {Error & {code?: string, sqlMessage?: string}} err
- * @returns {{status: number, message: string, details?: Array} | null}  null = not a known DB error
+ * @returns {{status: number, message: string, details?: Array} | null}  null if it's not one we know
  */
 function mapDbError(err) {
   if (!err || typeof err.code !== 'string') return null;
 
   if (isRowReferenced(err)) {
-    // Safety net only: the patient/doctor models already turn this into a specific 409.
+    // Just a fallback. The patient and doctor models already turn this into a more specific 409.
     return { status: HTTP_STATUS.CONFLICT, message: 'This record is referenced by other records and cannot be deleted' };
   }
 

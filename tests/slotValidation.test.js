@@ -1,9 +1,9 @@
-// Slot validation: format/calendar parsing (-> 400) and clinic rules (-> 422).
-// Pure functions only, no MySQL/Redis. "now" is FIXED, never the real clock.
+// Slot validation: parsing the date format (bad format -> 400) and the clinic rules (-> 422).
+// Only pure functions, and "now" is always a fixed date, never the real clock.
 const { parseClinicDateTime } = require('../src/utils/clock');
 const { slotRuleViolations, slotStartTimes } = require('../src/utils/slotRules');
 
-// Clinic Date convention: UTC fields hold clinic wall-clock time.
+// A clinic Date keeps the clinic's wall-clock time in its UTC fields.
 const NOW = new Date(Date.UTC(2027, 2, 10, 8, 0)); // 2027-03-10 08:00 clinic time
 
 function slot(text) {

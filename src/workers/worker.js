@@ -1,7 +1,7 @@
-// The background worker: a SEPARATE process (`npm run worker`), never imported by
-// the web server. Consumes "slot-freed" (waitlist promotions) and
-// "send-confirmation" (simulated SMS) jobs.
-require('../config/env'); // loads .env first, like src/server.js
+// The background worker. It runs as its own process (`npm run worker`) and the web
+// server never imports it. It handles "slot-freed" jobs (waitlist promotions) and
+// "send-confirmation" jobs (the pretend SMS).
+require('../config/env'); // load .env first, same as server.js
 const { Worker } = require('bullmq');
 const { createRedisConnection } = require('../config/redis');
 const appointmentModel = require('../models/appointmentModel');
@@ -32,7 +32,7 @@ function workerConnection() {
 }
 
 function startWorker(queueName, processor, concurrency, onCompleted) {
-  // Each Worker gets its own connection; BullMQ duplicates it for the blocking one.
+  // Each Worker gets its own connection. BullMQ makes a copy of it for its blocking commands.
   const worker = new Worker(queueName, processor, { connection: workerConnection(), concurrency });
   worker.on('completed', onCompleted);
   worker.on('failed', (job, err) => {
@@ -40,7 +40,7 @@ function startWorker(queueName, processor, concurrency, onCompleted) {
     console.error(`[worker] ${queueName} job ${job ? job.id : '?'} failed (attempt ${attempts}): ${err.message}`);
   });
   worker.on('error', (err) => {
-    // Connection loss is already reported once by config/redis.js; don't repeat it per retry.
+    // config/redis.js already reported the lost connection once, so don't repeat it on every retry.
     if (!REDIS_CONNECTION_ERRORS.has(err.code)) {
       console.error(`[worker] ${queueName} error: ${err.message || err.code}`);
     }
@@ -49,9 +49,9 @@ function startWorker(queueName, processor, concurrency, onCompleted) {
 }
 
 /**
- * Re-queues promotions whose slot-freed job was lost (e.g. a cancellation while Redis
- * was down). Runs at start-up and then every WAITLIST_SWEEP_INTERVAL_MS; never two at
- * once. A failed run is only logged: the next run tries again.
+ * Queues promotions whose slot-freed job got lost (a cancellation while Redis was
+ * down, for example). Runs at start-up and then every WAITLIST_SWEEP_INTERVAL_MS,
+ * never two at once. If a run fails it's only logged, and the next run tries again.
  */
 async function runSweep(store, label) {
   if (sweepRunning || shuttingDown) return;
@@ -76,12 +76,12 @@ async function runSweep(store, label) {
 async function main() {
   const store = createWaitlistStore(workerConnection());
 
-  // 1. Recovery BEFORE any job runs: entries left in processing lists by a crash
-  //    between LMOVE and LREM go back to the front of their waitlist.
+  // 1. Before any job runs, put back anything a crash left in a processing list
+  //    (between LMOVE and LREM) at the front of its waitlist.
   const recovered = await store.recoverProcessing();
   console.info(`[worker] recovery: ${recovered} waitlist entr${recovered === 1 ? 'y' : 'ies'} moved back from processing lists`);
 
-  // 2. Sweep now, then periodically, so a lost slot-freed job never needs a restart.
+  // 2. Sweep now and then on a timer, so a lost slot-freed job never needs a restart.
   await runSweep(store, 'start-up');
   sweepTimer = setInterval(() => runSweep(store, 'periodic'), WAITLIST_SWEEP_INTERVAL_MS);
 
@@ -118,10 +118,10 @@ async function shutdown(signal) {
   shuttingDown = true;
   console.info(`${signal} received, shutting down the worker`);
   clearInterval(sweepTimer);
-  // Lets running jobs finish, then stops taking new ones.
+  // Lets the jobs that are running finish, then stops taking new ones.
   await Promise.all(workers.map((worker) => worker.close()));
   await Promise.all(connections.map((connection) => connection.quit().catch(() => connection.disconnect())));
-  await closeQueues(); // the worker produces confirmation jobs too
+  await closeQueues(); // the worker adds confirmation jobs too
   await healthModel.closePool();
   process.exit(0);
 }

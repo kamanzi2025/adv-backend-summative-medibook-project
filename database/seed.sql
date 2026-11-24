@@ -1,25 +1,25 @@
--- =====================================================================
--- MediBook: sample data. Run AFTER schema.sql.
--- Explicit ids, FK-safe order (patients, doctors, appointments), one
--- transaction: either the whole seed loads or nothing does.
+-- MediBook sample data. Run it after schema.sql.
 --
--- What the data demonstrates:
---   * Doctor 1 (Dr. Kwame Boateng): 2027-03-15 has 11 BOOKED appointments
---     = 91.7% of the 12-slot cap  -> appears in the busy-days report;
---     a 12th booking still fits, a 13th is rejected (day full).
---   * Doctor 3 (Dr. Nana Owusu-Ansah): ZERO appointments -> appears with 0
---     in the doctors report (LEFT JOIN).
---   * Appointment 2: AP-002-style discount (paid 120.00 on a 150.00 fee).
---   * Appointment 12: CANCELLED in the SAME slot (2027-03-15 09:00) that
---     appointment 1 now holds -> proves a cancelled slot is re-bookable.
---   * Appointments 12 and 16: cancelled months ahead (> 48h notice),
---     so the policy gives a 100% refund.
+-- The ids are set by hand and the tables are filled in foreign-key order
+-- (patients, doctors, appointments). It all runs in one transaction, so either
+-- the whole seed loads or none of it does.
 --
--- Appointment dates are in 2027 (future, so they can be booked/cancelled in
--- the demo). booked_on / cancelled_at are HISTORY, so they are in the past
--- (November 2026): an event cannot have been recorded in the future.
+-- What the data is there to show:
+--   * Doctor 1 (Dr. Kwame Boateng) has 11 booked appointments on 2027-03-15.
+--     That's 91.7% of the 12-slot cap, so the day shows up in the busy-days
+--     report. A 12th booking still fits; a 13th is refused because the day is full.
+--   * Doctor 3 (Dr. Nana Owusu-Ansah) has no appointments at all, and still
+--     appears in the doctors report with 0 (that's what the LEFT JOIN is for).
+--   * Appointment 2 has a discount like AP-002 in the spreadsheet: 120.00 paid on a 150.00 fee.
+--   * Appointment 12 was cancelled in the same slot (2027-03-15 09:00) that
+--     appointment 1 holds now, which shows a cancelled slot can be booked again.
+--   * Appointments 12 and 16 were cancelled months ahead, well over 48 hours'
+--     notice, so they got a 100% refund.
+--
+-- The appointments are in 2027 so they're still in the future and can be booked
+-- or cancelled during the demo. booked_on and cancelled_at record things that
+-- already happened, so they're in the past (November 2026).
 -- All times are clinic wall-clock time (Africa/Johannesburg).
--- =====================================================================
 
 USE medibook;
 
@@ -43,11 +43,11 @@ INSERT INTO doctors (id, full_name, specialty, consultation_fee, room) VALUES
   (2, 'Dr. Efua Adjei',       'Paediatrics', 100.00, 'R-03'),
   (3, 'Dr. Nana Owusu-Ansah', 'Cardiology',  250.00, 'R-07');
 
--- BOOKED appointments (no cancellation columns).
+-- Booked appointments, so the cancellation columns stay empty.
 INSERT INTO appointments
   (id, appt_ref, patient_id, doctor_id, appt_datetime, amount_paid, status, booked_on)
 VALUES
-  -- Doctor 1, busy day 2027-03-15: 11 BOOKED slots, 09:00 to 14:00.
+  -- Doctor 1's busy day, 2027-03-15: 11 booked slots from 09:00 to 14:00.
   ( 1, 'AP-20270315-S001',  1, 1, '2027-03-15 09:00:00', 150.00, 'BOOKED', '2026-11-12 10:15:00'),
   ( 2, 'AP-20270315-S002',  2, 1, '2027-03-15 09:30:00', 120.00, 'BOOKED', '2026-11-02 09:05:00'),
   ( 3, 'AP-20270315-S003',  3, 1, '2027-03-15 10:00:00', 150.00, 'BOOKED', '2026-11-03 14:20:00'),
@@ -64,17 +64,17 @@ VALUES
   (14, 'AP-20270320-S014',  3, 2, '2027-03-20 10:30:00', 100.00, 'BOOKED', '2026-11-14 10:30:00'),
   (15, 'AP-20270402-S015',  2, 2, '2027-04-02 11:00:00', 100.00, 'BOOKED', '2026-11-15 11:45:00');
 
--- CANCELLED appointments (cancellation + refund columns all set).
--- refund_amount = amount_paid * refund_percent / 100 (chk_appt_refund_matches_percent).
+-- Cancelled appointments, with every cancellation and refund column filled in.
+-- refund_amount has to equal amount_paid * refund_percent / 100 (chk_appt_refund_matches_percent).
 INSERT INTO appointments
   (id, appt_ref, patient_id, doctor_id, appt_datetime, amount_paid, status,
    booked_on, cancelled_at, refund_percent, refund_amount)
 VALUES
-  -- Same doctor + slot as appointment 1: allowed because active_slot is NULL here.
-  -- Notice: 2026-11-10 16:45 -> 2027-03-15 09:00 is far more than 48h -> 100%.
+  -- Same doctor and slot as appointment 1. That's allowed because active_slot is NULL here.
+  -- Cancelled on 2026-11-10 for 2027-03-15, far more than 48 hours ahead, so 100%.
   (12, 'AP-20270315-S012',  3, 1, '2027-03-15 09:00:00', 150.00, 'CANCELLED',
        '2026-11-01 08:30:00', '2026-11-10 16:45:00', 100, 150.00),
-  -- Discounted booking cancelled with > 48h notice -> 100% of what was paid.
+  -- A discounted booking cancelled more than 48 hours ahead: 100% of what was paid back.
   (16, 'AP-20270322-S016',  4, 1, '2027-03-22 14:00:00', 120.00, 'CANCELLED',
        '2026-11-05 10:00:00', '2026-11-18 17:20:00', 100, 120.00);
 

@@ -1,8 +1,9 @@
-// Pure validation for patient request bodies.
+// Checks the body of patient create and update requests.
 const { text, validateBody } = require('./common');
 const { FIELD_LIMITS } = require('../config/constants');
 
-// Same shapes as the CHECK constraints in database/schema.sql.
+// These match the CHECK constraints in database/schema.sql, so bad input gets a
+// clear 400 here before MySQL would reject it.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?[0-9][0-9 ()-]{5,18}[0-9]$/;
 
@@ -19,12 +20,12 @@ const PATIENT_RULES = Object.freeze({
   }),
 });
 
-/** POST: all fields required. */
+/** POST: every field is required. */
 function validatePatientCreate(body) {
   return validateBody(body, PATIENT_RULES, { entity: 'patient' });
 }
 
-/** PATCH: any subset of fields, at least one. */
+/** PATCH: any of the fields, but at least one. */
 function validatePatientUpdate(body) {
   return validateBody(body, PATIENT_RULES, { partial: true, entity: 'patient' });
 }

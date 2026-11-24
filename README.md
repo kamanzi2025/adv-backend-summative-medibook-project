@@ -1,100 +1,106 @@
 # MediBook: Clinic Appointment System (backend)
 
-Node.js + Express 5 + MySQL 8 (`mysql2`, parameterized queries only, no ORM) + Redis 7 (BullMQ + plain lists).
-Exactly 3 tables (`patients`, `doctors`, `appointments`), a separate background worker, an `fs` audit log,
-Jest unit tests and a bilingual feedback page.
+The backend for a clinic's appointment bookings, built with Node.js, Express 5, MySQL 8 and Redis 7.
+All SQL goes through `mysql2` with parameterized queries and there's no ORM. Redis holds the
+waitlist (plain lists) and the background jobs (BullMQ). The database has exactly 3 tables
+(`patients`, `doctors`, `appointments`). There's also a separate worker process, an audit log
+written with `fs`, Jest unit tests and a feedback page in English and French.
 
-> The original assignment brief is kept unchanged **below the divider** at the end of this section.
-> Detailed reasoning for every decision: [`DESIGN_NOTES.md`](DESIGN_NOTES.md).
-> Schema diagram: [`schema-diagram.png`](schema-diagram.png), rendered from [`docs/schema-diagram.html`](docs/schema-diagram.html) (also as [`docs/schema.dbml`](docs/schema.dbml) and Mermaid in [`docs/schema-diagram.md`](docs/schema-diagram.md)).
+The original assignment brief is kept, unchanged, below the divider at the end of this file.
+The longer reasoning behind each decision is in [`DESIGN_NOTES.md`](DESIGN_NOTES.md). The schema
+diagram is [`schema-diagram.png`](schema-diagram.png), a screenshot of [`docs/schema-diagram.html`](docs/schema-diagram.html).
+The same design is also in [`docs/schema.dbml`](docs/schema.dbml) (for dbdiagram.io) and as Mermaid in
+[`docs/schema-diagram.md`](docs/schema-diagram.md).
 
 ## Prerequisites
 
-- **Node.js 18+** (developed on 22) and npm
-- **MySQL 8.0** running locally (developed on the native Windows service `MySQL80`, port 3306)
-- **Docker** (for Redis 7, via `docker-compose.yml`); any Redis ≥ 6.2 works (`LMOVE` is needed)
-- Optional: the VS Code **REST Client** extension, to run [`requests.http`](requests.http)
+- Node.js 18 or newer, with npm. I developed it on Node 22.
+- MySQL 8.0 running locally. I used the Windows service `MySQL80` on port 3306.
+- Docker, to run Redis 7 from `docker-compose.yml`. Any Redis from 6.2 up works, because the code needs `LMOVE`.
+- Optional: the VS Code REST Client extension, to send the requests in [`requests.http`](requests.http).
 
 ## Setup
 
-Run every command from the **project root** in **PowerShell**. Steps 3–4 use the `$mysql`
-variable defined at the top of step 3, so run them in the same window. The MySQL client isn't on
-PATH by default; instead of `$mysql` you can add `C:\Program Files\MySQL\MySQL Server 8.0\bin` to
-PATH and type `mysql`. Every `-p` prompts for that account's password.
+Run every command from the project root in PowerShell. Steps 3 and 4 use a `$mysql` variable
+that's set at the start of step 3, so do both in the same window. The MySQL client usually isn't
+on PATH. If you'd rather type `mysql`, add `C:\Program Files\MySQL\MySQL Server 8.0\bin` to PATH
+instead of using `$mysql`. Each `-p` asks for that account's password.
 
-**1. Install dependencies**
+**1. Install the dependencies**
 ```powershell
 npm install
 ```
-`npm audit` reports 2 moderate advisories in nodemon's dev-only dependency `minimatch`. The
-production dependencies are clean (`npm audit --omit=dev` → 0 vulnerabilities), so do not run
-`npm audit fix --force`.
+`npm audit` will mention 2 moderate advisories. They're in `minimatch`, which only nodemon uses
+during development. The packages the app actually runs with are clean (`npm audit --omit=dev`
+shows 0), so there's no need for `npm audit fix --force`.
 
-**2. Create `.env`** from the template (`.env` is gitignored and never committed):
+**2. Create your `.env`** by copying the template. `.env` is in `.gitignore`, so it never gets committed.
 ```powershell
 Copy-Item .env.example .env
 ```
-Edit `.env` if needed. `DB_USER=medibook_user` / `DB_PASSWORD=change_me` must match the user created
-in step 3.
+Change anything you need to. `DB_USER=medibook_user` and `DB_PASSWORD=change_me` have to match
+the MySQL user you create in step 3.
 
-**3. Create the least-privilege app user** (once, **as root**). The app only needs to read and
-write rows, so it gets `SELECT, INSERT, UPDATE, DELETE` on `medibook.*` and nothing else. If you
-picked another password in `.env`, use it here instead of `change_me`.
+**3. Create the app's own MySQL user.** You only do this once, logged in as root. The app only
+reads and writes rows, so this user gets `SELECT, INSERT, UPDATE, DELETE` on `medibook.*` and
+nothing more. If you picked a different password in `.env`, use it here instead of `change_me`.
 ```powershell
 $mysql = "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe"
 & $mysql -u root -p -e "CREATE USER IF NOT EXISTS 'medibook_user'@'localhost' IDENTIFIED BY 'change_me'; GRANT SELECT, INSERT, UPDATE, DELETE ON medibook.* TO 'medibook_user'@'localhost';"
 & $mysql -u root -p -e "SHOW GRANTS FOR 'medibook_user'@'localhost';"
 ```
-The grant can be given before the database exists, and it survives re-running `schema.sql`, because
-MySQL stores grants by database *name*.
+It's fine to grant this before the database exists. MySQL stores grants by database name, so
+the grant also survives running `schema.sql` again later.
 
-**4. Load the schema and the seed data, as root.** The app user can't load them:
-`schema.sql` starts with `DROP DATABASE IF EXISTS medibook; CREATE DATABASE medibook`, which needs
-root. PowerShell has no `<` redirection, so use the client's `source` command:
+**4. Load the schema and the sample data, as root.** The app user can't do this, because
+`schema.sql` starts with `DROP DATABASE IF EXISTS medibook; CREATE DATABASE medibook`. PowerShell
+doesn't support `<` redirection, so the commands use the MySQL client's `source` command instead.
 ```powershell
 & $mysql -u root -p --default-character-set=utf8mb4 -e "source database/schema.sql"
 & $mysql -u root -p --default-character-set=utf8mb4 -e "source database/seed.sql"
 ```
-Optional constraint demo (as the app user; it changes nothing because everything is rolled back):
+If you want to see the constraints working, run this as the app user. It changes nothing,
+because everything inside it is rolled back:
 ```powershell
 cmd /c "`"$mysql`" -u medibook_user -p --table --force medibook < database\verify.sql"
 ```
-It's fed through `cmd` so `--force` keeps going after the *expected* errors; `source` would stop at
-the first one.
+It goes through `cmd` so that `--force` can carry on past the errors the script expects.
+`source` would stop at the first one.
 
-**5. Start Redis** (Docker; bound to 127.0.0.1:6379, data kept in a named volume):
+**5. Start Redis** in Docker. It only listens on 127.0.0.1:6379 and keeps its data in a named volume.
 ```powershell
 docker compose up -d
 ```
 
-**6. Start the API** (terminal 1):
+**6. Start the API** in one terminal:
 ```powershell
 npm start            # http://localhost:3000   (npm run dev = auto-restart on changes)
 ```
-Check: `GET http://localhost:3000/api/health` → `{"status":"ok","database":"up"}`.
+To check it's working, open `GET http://localhost:3000/api/health`. You should get `{"status":"ok","database":"up"}`.
 
-**7. Start the worker** (terminal 2; a separate process for waitlist promotions and confirmation "SMS"):
+**7. Start the worker** in a second terminal. It's a separate process that handles waitlist
+promotions and the confirmation "SMS" messages.
 ```powershell
 npm run worker
 ```
 
-**8. Run the unit tests** (pure functions only; no MySQL or Redis needed):
+**8. Run the unit tests.** They only test pure functions, so MySQL and Redis don't need to be running.
 ```powershell
 npm test
 ```
 
-**Optional: concurrency demos** (with the API running):
+**Optional: the concurrency demos**, with the API running:
 ```powershell
 npm run demo:concurrency   # 20 simultaneous bookings for one slot → 1 × 201; daily-cap race → stops at 12
 ```
 
-**Environment variables** (`.env`, see [`.env.example`](.env.example)): `PORT`, `CLINIC_TIMEZONE`
-(Africa/Johannesburg), `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `REDIS_HOST`, `REDIS_PORT`,
-`REDIS_PASSWORD` (optional), `LOG_DIR` (default `logs`).
+**Environment variables.** These go in `.env` (see [`.env.example`](.env.example)): `PORT`,
+`CLINIC_TIMEZONE` (Africa/Johannesburg), `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`,
+`REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` (optional) and `LOG_DIR` (`logs` by default).
 
-**Times** are clinic wall-clock times (`CLINIC_TIMEZONE`), sent and returned as `"YYYY-MM-DD HH:mm"`.
-"Now" always comes from Node (`clinicNow()`), never from MySQL's `NOW()`. Audit-log `timestamp`s are
-UTC instants.
+**Times.** Appointment times are the clinic's local wall-clock time (`CLINIC_TIMEZONE`), sent and
+returned as `"YYYY-MM-DD HH:mm"`. "Now" always comes from Node (`clinicNow()`), never from MySQL's
+`NOW()`. The `timestamp` in each audit-log line is in UTC.
 
 ## Project structure
 
@@ -118,8 +124,8 @@ tests/         Jest unit tests (no DB/Redis)
 
 ## Endpoints
 
-All JSON responses are `{ "data": ... }` (lists add `"meta"`), and every error is
-`{ "error": { "status", "message", "details"? } }`.
+Every successful JSON response looks like `{ "data": ... }`, and lists also include `"meta"`.
+Every error looks like `{ "error": { "status", "message", "details"? } }`.
 
 | Method | Path | Purpose | Success | Main errors |
 |---|---|---|---|---|
@@ -141,7 +147,7 @@ All JSON responses are `{ "data": ... }` (lists add `"meta"`), and every error i
 | GET | `/api/reports/busy-days` | doctor-days > 80% of the cap | 200 | |
 | GET | `/feedback?lang=en\|fr` | feedback form (HTML) | 200 | |
 
-Example bodies:
+Some example request bodies and responses:
 
 ```jsonc
 // POST /api/patients
@@ -160,81 +166,115 @@ Example bodies:
 { "data": { "id": 17, "status": "CANCELLED", "refundPercent": 50, "refundAmount": 50, "hoursNotice": 35.84, "...": "..." } }
 ```
 
-Every endpoint and edge case is in [`requests.http`](requests.http): double booking, 13th booking, outside
-hours, 09:15, every refund tier, waitlist join and promotion, reports and the feedback page.
+[`requests.http`](requests.http) has a request for every endpoint and edge case: a double booking,
+the 13th booking of a day, times outside working hours, 09:15, each refund tier, joining the
+waitlist and being promoted, the reports and the feedback page.
 
 ## Justifications (Parts C, D, E)
 
 ### Part C: API and business rules
-- **REST design:** plural nouns, ids in the path, the HTTP method is the verb. `PATCH` for partial
-  updates (send only the changed fields; PUT would need the whole resource). `POST /api/appointments`
-  is a top-level collection because an appointment belongs equally to a patient and a doctor; a doctor's
-  day, waitlist and statistics are read-only sub-resources of `/api/doctors/:id`.
-- **Cancel = `PATCH /api/appointments/:id/cancel`, not `DELETE`:** the record is *kept* (refund history,
-  revenue); only its state changes. The refund is never accepted from the client.
-- **Status codes:** 201 + `Location` (create), 204 (delete), **400** = the request is malformed (bad JSON,
-  wrong types, unknown fields, `2027-02-30`), **404** = unknown id or route, **405** = wrong method on a
-  real URL, **409** = valid but conflicts with current data (slot taken, day full, duplicate email,
-  deleting a doctor with appointments), **422** = well-formed but breaks a business rule (past time,
-  outside 09:00–16:30, 09:15, amount above the fee, cancelling twice or after the start), **503** =
-  database or Redis temporarily unavailable. One central error middleware + `AppError`; 500s hide
-  internals and are logged.
-- **Delete behaviour:** foreign keys are `ON DELETE RESTRICT`, so deleting a patient or doctor who has
-  appointments → **409** ("appointments are kept as refund history"). No cascade, so financial history
-  is never lost. The model recognises both MySQL codes for this (1451 with the constraint name, and
-  1217 without it, which is what the least-privilege `medibook_user` receives), so the message is
-  always the specific one.
-- **Slot uniqueness:** a STORED generated column `active_slot = appt_datetime if BOOKED else NULL` with
-  `UNIQUE (doctor_id, active_slot)`. Two BOOKED rows for one doctor-time are impossible, while cancelled
-  rows (NULL) don't block re-booking. The same trick on `(patient_id, active_slot)` stops a patient from
-  being in two places at once.
-- **Concurrency:** each booking is one transaction that first locks the doctor row
-  (`SELECT … FOR UPDATE`), so bookings for the same doctor run one at a time. That makes "count the day,
-  then insert" race-free and enforces the **12/day cap** (which no unique index can). The UNIQUE index is
-  the final guarantee against double booking. Proven by `npm run demo:concurrency` (20 simultaneous →
-  exactly one 201). Deadlocks and lock timeouts get a bounded retry, then 503.
-- **Refund boundaries:** > 48h → 100%; **24h to 48h inclusive** → 50% (so *exactly* 48h and *exactly* 24h
-  are 50%, because the brief says "more than 48" and "less than 24"); < 24h → 0%. Computed in integer
-  cents, rounded exactly like MySQL `ROUND(…, 2)`, enforced again by a CHECK constraint. Status +
-  refund columns are written in **one** UPDATE inside one transaction.
-- **amountPaid:** defaults to the doctor's fee; an optional discount from 0 to the fee is allowed (the
-  spreadsheet's AP-002 paid 120.00 on a 150.00 fee).
-- **Revenue** = `SUM(amount_paid − refund_amount)`: what the clinic actually kept. **Utilization** =
-  booked ÷ (12 × 7) over the 7-day window starting at `?from` (default today). All report figures are
-  computed in SQL (LEFT JOIN + COALESCE, conditional COUNT, a recursive CTE for zero days, HAVING with
-  the cap and threshold as parameters).
+
+**REST design.** URLs use plural nouns with the id in the path, and the HTTP method says what
+happens. Updates use `PATCH` because you only send the fields that change; `PUT` would mean sending
+the whole resource every time. `POST /api/appointments` is its own top-level collection because an
+appointment belongs as much to the patient as to the doctor. A doctor's day, waitlist and
+statistics are read-only, so they sit under `/api/doctors/:id`.
+
+**Cancelling is `PATCH /api/appointments/:id/cancel`, not `DELETE`.** The appointment isn't
+removed. Its status changes, and the row stays for refund history and revenue. The refund is
+always worked out by the server and never taken from the client.
+
+**Status codes.** 201 with a `Location` header for anything created, and 204 for a delete.
+400 means the request itself is malformed: bad JSON, wrong types, unknown fields, or a date like
+`2027-02-30`. 404 is an unknown id or route. 405 is the wrong method on a URL that exists. 409
+means the request is valid but clashes with what's already stored: the slot is taken, the day is
+full, the email is already used, or the doctor still has appointments. 422 means the request is
+well-formed but breaks a business rule: a time in the past, outside 09:00–16:30, on 09:15, an
+amount above the fee, or cancelling twice or after the start. 503 means MySQL or Redis is down for
+the moment. All of this goes through one error middleware and the `AppError` class. A 500 never
+shows the client any internals; the details are logged on the server.
+
+**Deleting patients and doctors.** The foreign keys are `ON DELETE RESTRICT`, so deleting a
+patient or doctor who has appointments gives a 409 explaining that appointments are kept as
+refund history. Nothing cascades, so financial history can't disappear by accident. MySQL reports
+this with two different codes: 1451, which includes the constraint name, and 1217, which doesn't
+and is what the least-privilege `medibook_user` gets. The model handles both, so the message is
+always the specific one.
+
+**One booking per slot.** `active_slot` is a stored generated column that equals
+`appt_datetime` while the appointment is BOOKED and is NULL once it's cancelled. With
+`UNIQUE (doctor_id, active_slot)`, two booked rows for the same doctor and time are impossible.
+Cancelled rows are NULL, and NULLs never clash, so they don't block anyone rebooking. The same
+idea on `(patient_id, active_slot)` stops a patient being booked in two places at once.
+
+**Concurrency.** Each booking is one transaction, and the first thing it does is lock the
+doctor's row with `SELECT … FOR UPDATE`. Bookings for the same doctor therefore run one after
+another, so "count the day's bookings, then insert" can't be raced. That's what enforces the
+12-per-day cap, which no unique index could do. The unique index is still there as the last line
+of defense against double booking. `npm run demo:concurrency` shows it working: 20 requests at
+once and exactly one gets a 201. Deadlocks and lock timeouts are retried a limited number of
+times, then the client gets a 503.
+
+**Refund boundaries.** More than 48 hours' notice gets 100%. From 24 to 48 hours, inclusive,
+gets 50%, so exactly 48h and exactly 24h are both 50%: the brief says "more than 48" for the top
+tier and "less than 24" for the bottom one. Under 24 hours gets 0%. The amount is calculated in
+whole cents and rounded the same way as MySQL's `ROUND(…, 2)`, and a CHECK constraint checks it
+again. The status and refund columns are written in a single UPDATE inside one transaction.
+
+**amountPaid.** It defaults to the doctor's fee. A discount anywhere from 0 up to the fee is
+allowed, because in the spreadsheet AP-002 paid 120.00 on a 150.00 fee.
+
+**Revenue and utilization.** Revenue is `SUM(amount_paid − refund_amount)`, the money the clinic
+actually kept. Utilization is booked ÷ (12 × 7) over the 7 days starting at `?from`, which is
+today if it's left out. Every report figure is calculated in SQL, using LEFT JOIN with COALESCE,
+conditional COUNT, a recursive CTE so empty days still appear, and HAVING with the cap and the
+threshold passed in as parameters.
 
 ### Part D: Audit log
-`src/services/auditLogger.js` appends one JSON line per event to `logs/audit.log` with `fs/promises`
-(`mkdir({ recursive: true })` once, then `appendFile`). It never uses `*Sync`, so the event loop is never
-blocked. One small append per line means lines never interleave. Everything is in `try/catch`, so a
-logging failure only prints a console error and **never fails the request**. The one exception is
-the worker's confirmation job, whose whole purpose is the log line: it uses `logStrict`, so a failed
-write fails the job and BullMQ retries it instead of marking a lost message as done. Events: `APPOINTMENT_BOOKED`,
-`APPOINTMENT_CANCELLED`, `WAITLIST_JOINED`, `WAITLIST_PROMOTED`, `WAITLIST_PROMOTION_FAILED`,
-`NOTIFICATION_SENT`. Lines are written only after the database COMMIT, so the log never records
-something that was rolled back.
+
+`src/services/auditLogger.js` adds one JSON line per event to `logs/audit.log` using
+`fs/promises`. It runs `mkdir({ recursive: true })` once, then `appendFile` for each line. There
+are no `*Sync` calls, so it never blocks the event loop, and each line is a single small append,
+so two lines can't get mixed together. Everything is wrapped in `try/catch`, so if logging fails
+the server prints an error and the user's request still succeeds.
+
+There's one exception. For the worker's confirmation job, writing the log line is the whole
+point, so it uses `logStrict`. A failed write then fails the job, and BullMQ retries it instead of
+marking a lost message as done.
+
+The events are `APPOINTMENT_BOOKED`, `APPOINTMENT_CANCELLED`, `WAITLIST_JOINED`,
+`WAITLIST_PROMOTED`, `WAITLIST_PROMOTION_FAILED` and `NOTIFICATION_SENT`. Lines are only written
+after the database COMMIT, so the log never records something that was rolled back.
 
 ### Part E: Queues and Redis
-- **BullMQ for jobs** (`slot-freed`, `send-confirmation`): retries with exponential backoff, failed jobs
-  kept. **Plain Redis lists for the waitlist**: strictly FIFO (`RPUSH` to join, `LMOVE … LEFT` to promote),
-  easy to inspect (`GET /api/doctors/:id/waitlist`). Keys: `waitlist:doctor:{id}:slot:{datetime}` (that
-  exact slot) and `waitlist:doctor:{id}:day:{date}` (the whole day was full). A Lua script prevents
-  duplicate joins atomically.
-- **Separate worker process** (`npm run worker`): on a cancellation, it takes the first waiting patient
-  (exact-slot list first, then the day list) and books them through the **same** booking function as
-  the API (same transaction and rules), then queues their confirmation.
-- **A promotion that fails never loses the patient:** `LMOVE` moves the entry atomically into a
-  *processing* list, and it's removed only after the booking COMMITs. **Transient** errors (DB/Redis) →
-  back to the **front** of the list and the job is retried with backoff. **Permanent** failures (patient
-  deleted, already booked at that time, …) → moved to `waitlist:failed` with the reason (audited), and
-  the next patient is tried. "Slot re-taken meanwhile" → back to the front (not the patient's fault). On
-  start-up the worker returns anything stuck in processing lists to the front of their waitlist.
-- **Redis down:** MySQL is the source of truth, so booking and cancelling still succeed (the job isn't
-  queued; a warning is logged), and joining or reading the waitlist → 503. A slot-freed job lost while
-  Redis was down is recovered by the worker's **waitlist sweep**, which runs at start-up and then every
-  60 s (`WAITLIST_SWEEP_INTERVAL_MS`): any waiting list whose slot or day has room gets a new job, so
-  no restart is needed.
+
+**Two kinds of Redis use.** The jobs (`slot-freed` and `send-confirmation`) use BullMQ, which
+gives retries with exponential backoff and keeps failed jobs to look at. The waitlist itself uses
+plain Redis lists: they're strictly first-in, first-out (`RPUSH` to join, `LMOVE … LEFT` to take
+the first patient) and easy to inspect through `GET /api/doctors/:id/waitlist`. The keys are
+`waitlist:doctor:{id}:slot:{datetime}` for one exact slot and `waitlist:doctor:{id}:day:{date}`
+for patients happy with any slot that day. A small Lua script stops the same patient joining
+twice, atomically.
+
+**A separate worker process** (`npm run worker`). When someone cancels, the worker takes the
+first waiting patient, checking the exact-slot list before the day list. It books them through
+the same booking function the API uses, with the same transaction and rules, and then queues
+their confirmation.
+
+**A failed promotion never loses the patient.** `LMOVE` moves the entry atomically into a
+*processing* list, and it's only removed once the booking has committed. If the error is
+temporary (MySQL or Redis trouble), the patient goes back to the front of the list and the job is
+retried with backoff. If it can never work (the patient was deleted, or already has another
+appointment at that time), the entry moves to `waitlist:failed` with the reason, gets audited,
+and the next patient is tried. If someone else took the slot in the meantime, that's not the
+patient's fault, so they go back to the front too. When the worker starts, it puts anything left
+in a processing list back at the front of its waitlist.
+
+**When Redis is down.** MySQL is the source of truth, so booking and cancelling still work: the
+job just isn't queued and a warning is logged. Joining or reading the waitlist gives a 503. A
+slot-freed job lost this way is picked up by the worker's waitlist sweep, which runs at start-up
+and then every 60 seconds (`WAITLIST_SWEEP_INTERVAL_MS`). Any waiting list whose slot or day has
+room gets a new job, so nothing has to be restarted.
 
 ---
 ---

@@ -1,6 +1,7 @@
-// Loads .env once and exposes typed, validated connection settings.
-// Imported by the web server and the worker. Never imported by pure utils or tests.
-// Optional settings (CLINIC_TIMEZONE, LOG_DIR) are read by config/settings.js.
+// Loads .env and checks the database and Redis settings once at start-up, so a
+// missing value fails immediately with a clear message. The server and the
+// worker import this; the pure utils and the tests don't. The optional
+// settings (CLINIC_TIMEZONE, LOG_DIR) live in config/settings.js.
 require('dotenv').config();
 
 function required(name) {

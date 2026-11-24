@@ -1,20 +1,20 @@
-// Factory for ioredis connections (BullMQ queues, worker, waitlist).
+// Creates Redis connections for the queues, the worker and the waitlist.
 const IORedis = require('ioredis');
 const env = require('./env');
 const { REDIS_RETRY_STEP_MS, REDIS_RETRY_MAX_MS } = require('./constants');
 
-// Server role only: a command that gets no answer at all (e.g. a half-open TCP
-// connection) is rejected after this long, so it can never hold an HTTP request.
+// For the web server only: if Redis never answers a command (a half-open
+// connection, say), give up after 2 seconds instead of leaving the HTTP request hanging.
 const SERVER_COMMAND_TIMEOUT_MS = 2000;
 
 /**
  * @param {object} options
  * @param {'server'|'worker'} options.role
- *   server: fail fast. If Redis is down, commands reject immediately so an HTTP
- *           request never hangs waiting for Redis (booking/cancelling still succeed),
- *           and an unanswered command times out after SERVER_COMMAND_TIMEOUT_MS.
- *   worker: BullMQ workers need blocking commands that wait forever
- *           (maxRetriesPerRequest must be null); commands wait for a reconnect.
+ *   server: fail fast. With Redis down, commands fail straight away so a request
+ *           never waits on Redis (booking and cancelling still work), and a command
+ *           that gets no answer times out after SERVER_COMMAND_TIMEOUT_MS.
+ *   worker: BullMQ needs blocking commands that can wait forever
+ *           (maxRetriesPerRequest: null), so commands wait for Redis to come back.
  */
 function createRedisConnection({ role }) {
   const isWorker = role === 'worker';

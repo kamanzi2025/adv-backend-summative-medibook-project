@@ -1,4 +1,4 @@
-// Mounted at /feedback: the translated course-feedback page (README Part G).
+// Mounted at /feedback: the translated course feedback page (Part G).
 const { Router } = require('express');
 const feedbackController = require('../controllers/feedbackController');
 const methodNotAllowed = require('../middleware/methodNotAllowed');

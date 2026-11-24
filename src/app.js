@@ -1,4 +1,5 @@
-// Builds the Express app WITHOUT listening, so it can be imported on its own.
+// Builds the Express app but doesn't start listening. server.js does that,
+// which keeps the app importable on its own.
 const express = require('express');
 const healthRoutes = require('./routes/healthRoutes');
 const patientRoutes = require('./routes/patientRoutes');
@@ -19,7 +20,7 @@ function createApp() {
 
   app.use('/api/health', healthRoutes);
   app.use('/api/patients', patientRoutes);
-  // Doctor sub-resources use Router({ mergeParams: true }) to read :id.
+  // These two routers read the doctor :id from the mount path (mergeParams).
   app.use('/api/doctors/:id/statistics', statisticsRoutes);
   app.use('/api/doctors/:id/waitlist', waitlistRoutes);
   app.use('/api/doctors', doctorRoutes);
@@ -27,7 +28,7 @@ function createApp() {
   app.use('/api/reports', reportRoutes);
   app.use('/feedback', feedbackRoutes);
 
-  // Order matters: unknown routes first, then the single error handler last.
+  // The 404 handler has to come after every route, and the error handler last of all.
   app.use(notFound);
   app.use(errorHandler);
 

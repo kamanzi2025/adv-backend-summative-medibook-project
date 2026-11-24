@@ -1,4 +1,4 @@
-// Optional settings: defaults from constants, overridden by process.env at call time.
+// Optional settings: the defaults from constants, overridden by process.env when called.
 const { clinicTimezone, logDir } = require('../src/config/settings');
 const { DEFAULT_CLINIC_TIMEZONE, AUDIT_LOG } = require('../src/config/constants');
 

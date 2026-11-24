@@ -1,10 +1,10 @@
-// PATCH /api/appointments/:id/cancel takes no input: the refund is always computed
-// by the server. No body or an empty JSON object {} is accepted; anything else
-// (e.g. a client trying to send refundPercent) is a 400. Pure: no DB, no Redis.
+// Cancelling takes no input, because the server always works out the refund.
+// No body or an empty {} is fine. Anything else, like a client trying to send its
+// own refundPercent, gets a 400.
 const AppError = require('../utils/AppError');
 const { isPlainObject } = require('./common');
 
-/** @throws {AppError} 400 if the body is not absent or {} */
+/** @throws {AppError} 400 unless the body is missing or {} */
 function assertEmptyCancelBody(body) {
   if (body === undefined) return;
   if (!isPlainObject(body)) {

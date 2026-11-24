@@ -1,4 +1,4 @@
-// Audit logger: real files in a temp dir (no MySQL/Redis), plus injected failing fs.
+// Audit logger tests: real files in a temp folder (no MySQL or Redis), plus a fake fs that fails on purpose.
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');

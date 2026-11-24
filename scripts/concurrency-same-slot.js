@@ -1,6 +1,6 @@
-// DEMO 1: 20 different patients try to book the SAME doctor slot at the SAME instant.
-// Expected: exactly one 201 Created, nineteen 409 Conflict.
-// Run with the API started (npm start):  npm run demo:same-slot
+// Demo 1: 20 different patients try to book the same doctor slot at the same moment.
+// Exactly one should get 201 Created and the other nineteen 409 Conflict.
+// Start the API first (npm start), then run: npm run demo:same-slot
 const { api, ensureDemoPatients, findEmptyDay, bookedCount, tally, BASE_URL } = require('./lib/demoClient');
 
 const DOCTOR_ID = 2;

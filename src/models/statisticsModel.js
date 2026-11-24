@@ -1,17 +1,17 @@
-// All SQL for GET /api/doctors/:id/statistics. Every figure is computed by MySQL;
-// Node only supplies the clinic clock values and the business numbers as ? parameters
-// (DESIGN_NOTES §4: no NOW()/CURDATE() in SQL) and renames columns to camelCase.
+// SQL for GET /api/doctors/:id/statistics. MySQL calculates every figure. Node only
+// passes in the clinic's "now" and the business numbers as ? parameters, since the
+// app never uses NOW() or CURDATE() (DESIGN_NOTES §4), and renames the columns.
 const { pool } = require('../config/db');
 const { APPOINTMENT_STATUS, DAILY_CAP, STATS_WINDOW_DAYS } = require('../config/constants');
 const { REVENUE_COLLECTED } = require('./sqlFragments');
 
 /**
- * Revenue (lifetime), upcoming count and the window's utilization for one doctor.
+ * Lifetime revenue, the upcoming count and utilization over the window for one doctor.
  * @param {object} args
  * @param {number} args.doctorId
  * @param {string} args.now          "YYYY-MM-DD HH:mm:ss" clinic time
  * @param {string} args.windowStart  "YYYY-MM-DD 00:00:00", first day of the window
- * @param {string} args.windowEnd    "YYYY-MM-DD 00:00:00", the day AFTER the window
+ * @param {string} args.windowEnd    "YYYY-MM-DD 00:00:00", the day after the window
  * @returns {Promise<object|null>} null if the doctor doesn't exist
  */
 async function findDoctorSummary({ doctorId, now, windowStart, windowEnd }) {
@@ -53,8 +53,9 @@ async function findDoctorSummary({ doctorId, now, windowStart, windowEnd }) {
 }
 
 /**
- * One row per day for STATS_WINDOW_DAYS days starting at `from`, zero days included:
- * a recursive CTE generates the calendar, appointments are LEFT JOINed onto it.
+ * One row per day for STATS_WINDOW_DAYS days from `from`, including days with
+ * nothing booked. A recursive CTE builds the list of dates and the appointments
+ * are LEFT JOINed onto it, so an empty day shows 0 instead of disappearing.
  * @param {number} doctorId
  * @param {string} from  "YYYY-MM-DD"
  * @returns {Promise<Array<{date: string, booked: number, utilizationPercent: number}>>}

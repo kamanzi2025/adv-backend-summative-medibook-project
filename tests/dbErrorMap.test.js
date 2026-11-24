@@ -1,4 +1,4 @@
-// MySQL error -> HTTP mapping. Pure: fake error objects only, no MySQL.
+// MySQL error to HTTP status mapping. Uses fake error objects, so no MySQL needed.
 const { mapDbError, duplicateKeyName, isRowReferenced } = require('../src/utils/dbErrorMap');
 const { HTTP_STATUS } = require('../src/config/constants');
 

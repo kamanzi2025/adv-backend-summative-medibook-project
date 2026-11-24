@@ -1,10 +1,11 @@
-// Waitlist safety sweep (run by the worker at start-up and every
-// WAITLIST_SWEEP_INTERVAL_MS): a "slot-freed" job lost while Redis was down (the
-// cancellation still succeeded in MySQL) would leave patients waiting for a slot
-// that is actually free. For every non-empty waiting list whose slot (or, for a
-// day list, some slot that day) is free and in the future, queue a slot-freed job.
-// A wrong guess is harmless: the processor answers SLOT_TAKEN / DAY_FULL by
-// putting the patient back at the front. Dependencies are injected for tests.
+// The waitlist safety sweep. The worker runs it at start-up and then every
+// WAITLIST_SWEEP_INTERVAL_MS. If Redis was down when someone cancelled, the
+// cancellation still succeeded in MySQL but the "slot-freed" job was never
+// queued, so patients would keep waiting for a slot that's actually free.
+// The sweep looks at every waiting list that isn't empty, and if its slot (or for a
+// day list, any slot that day) is free and still in the future, it queues a job.
+// Guessing wrong does no harm: if the slot or day turns out to be full, the
+// processor puts the patient back at the front. Dependencies are passed in for the tests.
 const { allKeysPattern, parseWaitlistKey } = require('../utils/waitlistKeys');
 const { sweepSlotFor } = require('../utils/waitlistPromotion');
 const { parseClinicDate, dayRange } = require('../utils/clock');

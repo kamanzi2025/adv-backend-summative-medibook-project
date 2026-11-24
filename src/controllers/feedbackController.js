@@ -1,18 +1,18 @@
-// GET /feedback: the course-feedback page in the requested language (README Part G).
+// GET /feedback: the course feedback page in the requested language (Part G).
 const { loadLocales, resolveLanguage, formatToday } = require('../utils/i18n');
 const { renderFeedbackPage } = require('../utils/feedbackPage');
 const { clinicNow, toSqlDate } = require('../utils/clock');
 
-// The locale files are read ONCE, asynchronously, when this module is first required
-// (at app startup), never per request and never with *Sync. Every request awaits the
-// same memoized promise, which is already settled after startup, so no file I/O happens
-// in the handler. If loading fails, the error is logged now and every request gets a
-// 500 through the central error handler (the .catch also prevents an unhandled
-// rejection from crashing the process before the first request).
+// The locale files are read once, asynchronously, when the app starts, not on
+// every request and never with a *Sync call. Each request awaits the same promise,
+// which has already resolved by then, so the handler does no file I/O at all.
+// If loading fails, the error is printed now and every request gets a 500 from
+// the error handler. The .catch also stops an unhandled rejection from crashing
+// the process before the first request arrives.
 const localesReady = loadLocales();
 localesReady.catch((err) => console.error('[error] Could not load the /feedback locale files:', err.message));
 
-/** GET /feedback?lang=en|fr (anything else falls back to English) */
+/** GET /feedback?lang=en|fr (any other value gets English) */
 async function getFeedbackPage(req, res) {
   const locales = await localesReady;
   const language = resolveLanguage(req.query.lang);

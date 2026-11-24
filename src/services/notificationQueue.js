@@ -1,9 +1,9 @@
-// Producer for "send-confirmation" jobs (consumed by src/workers/worker.js).
-// Contract: never throws, so it can never fail a request.
+// Adds "send-confirmation" jobs for the worker (src/workers/worker.js) to run.
+// It never throws, so it can't fail a request.
 const queues = require('./queues');
 const { QUEUE } = require('../config/constants');
 
-/** Job data: everything the worker needs to write the message, no DB lookup needed. */
+/** Everything the worker needs to write the message, so it doesn't have to query the database. */
 function confirmationJobData(appointment, source) {
   return {
     appointmentId: appointment.id,

@@ -1,8 +1,8 @@
-// Pure validation for doctor request bodies.
+// Checks the body of doctor create and update requests.
 const { text, money, validateBody } = require('./common');
 const { FIELD_LIMITS } = require('../config/constants');
 
-// Room codes like "R-12": 1-3 letters, a hyphen, 1-4 digits. Stored upper-case.
+// Room codes like "R-12": 1 to 3 letters, a hyphen, 1 to 4 digits. Saved in capitals.
 const ROOM_PATTERN = /^[A-Z]{1,3}-[0-9]{1,4}$/;
 
 const DOCTOR_RULES = Object.freeze({
@@ -16,12 +16,12 @@ const DOCTOR_RULES = Object.freeze({
   }),
 });
 
-/** POST: all fields required. */
+/** POST: every field is required. */
 function validateDoctorCreate(body) {
   return validateBody(body, DOCTOR_RULES, { entity: 'doctor' });
 }
 
-/** PATCH: any subset of fields, at least one. */
+/** PATCH: any of the fields, but at least one. */
 function validateDoctorUpdate(body) {
   return validateBody(body, DOCTOR_RULES, { partial: true, entity: 'doctor' });
 }

@@ -1,4 +1,4 @@
-// Pure booking helpers: amountPaid resolution, appt_ref format, day ranges.
+// Booking helpers: the amount paid, the appt_ref format and day ranges.
 const { resolveAmountPaid } = require('../src/utils/payment');
 const { generateApptRef } = require('../src/utils/apptRef');
 const { dayRange, parseClinicDateTime } = require('../src/utils/clock');

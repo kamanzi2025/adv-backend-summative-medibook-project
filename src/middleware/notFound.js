@@ -1,4 +1,4 @@
-// Catch-all for any URL/method that no route handled. Registered after all routes.
+// Runs when no route matched the request. It's registered after all the routes.
 const AppError = require('../utils/AppError');
 
 function notFound(req, res, next) {

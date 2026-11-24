@@ -1,5 +1,5 @@
-// Redis key names for the waitlist, built only from WAITLIST_KEYS.
-// Pure module: no Redis import, safe for unit tests.
+// Redis key names for the waitlist, all built from WAITLIST_KEYS. No Redis import,
+// so the tests can use it.
 //   <PREFIX>:<doctorId>:slot:<YYYY-MM-DDTHH:mm>   waiting for one exact slot
 //   <PREFIX>:<doctorId>:day:<YYYY-MM-DD>          waiting for any slot that day
 //   <waitlist key><PROCESSING_SUFFIX>             entries being promoted right now
@@ -43,26 +43,26 @@ function processingKey(listKey) {
   return `${listKey}${PROCESSING_SUFFIX}`;
 }
 
-/** SCAN pattern for every list (waiting and processing) of one doctor. */
+/** SCAN pattern matching all of one doctor's lists, waiting and processing. */
 function doctorKeyPattern(doctorId) {
   return `${PREFIX}:${doctorId}:*`;
 }
 
-/** SCAN pattern for every waiting and processing list of every doctor. */
+/** SCAN pattern matching every waiting and processing list for every doctor. */
 function allKeysPattern() {
   return `${PREFIX}:*`;
 }
 
-/** SCAN pattern for every processing list. */
+/** SCAN pattern matching every processing list. */
 function processingKeyPattern() {
   return `${PREFIX}:*${PROCESSING_SUFFIX}`;
 }
 
 /**
- * Parses a waitlist key back into its parts, or null for any other key.
+ * Splits a waitlist key back into its parts, or returns null for any other key.
  * @returns {{ doctorId: number, type: 'slot'|'day', date: string,
  *   appointmentDateTime: string|null, processing: boolean, listKey: string }|null}
- *   listKey is always the waiting list (without the processing suffix).
+ *   listKey is always the waiting list, without the processing suffix.
  */
 function parseWaitlistKey(key) {
   const match = typeof key === 'string' ? KEY_PATTERN.exec(key) : null;
@@ -79,7 +79,7 @@ function parseWaitlistKey(key) {
   };
 }
 
-/** Human-readable name of a waiting list, e.g. "slot waitlist of doctor 2 for 2027-05-03 10:00". */
+/** A readable name for a list, e.g. "slot waitlist of doctor 2 for 2027-05-03 10:00". */
 function describeWaitlist(listKey) {
   const parts = parseWaitlistKey(listKey);
   if (!parts) return listKey;

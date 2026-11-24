@@ -1,4 +1,4 @@
-// Entry point for `npm start`: creates the app, listens, and shuts down cleanly.
+// Entry point for `npm start`. Starts the API and closes Redis and MySQL cleanly on Ctrl+C.
 const env = require('./config/env');
 const healthModel = require('./models/healthModel');
 const { closeQueues } = require('./services/queues');

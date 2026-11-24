@@ -1,7 +1,7 @@
-# MediBook API: manual test requests.
-# Open in VS Code with the "REST Client" extension (humao.rest-client) and click
-# "Send Request" above any request. Start the server first: npm start
-# Reload clean seed data afterwards (see README): some requests below delete rows.
+# MediBook API: requests for trying every endpoint by hand.
+# Open this file in VS Code with the "REST Client" extension (humao.rest-client) and
+# click "Send Request" above a request. Start the server first with: npm start
+# Some of these delete or add rows, so reload the seed data afterwards (see README).
 
 @baseUrl = http://localhost:3000
 @json = application/json
@@ -38,7 +38,7 @@ GET {{baseUrl}}/api/patients/0
 ### Unknown id → 404
 GET {{baseUrl}}/api/patients/9999
 
-### Create with EVERY field invalid + an unknown field → 400 listing all four problems
+### Every field invalid plus an unknown field → 400 listing all four problems
 POST {{baseUrl}}/api/patients
 Content-Type: {{json}}
 
@@ -71,7 +71,7 @@ Content-Type: {{json}}
   "phone": "0244-000-000"
 }
 
-### Create → 201 + Location header (values are trimmed, email lower-cased)
+### Create → 201 + Location header (values get trimmed and the email lower-cased)
 # @name createPatient
 POST {{baseUrl}}/api/patients
 Content-Type: {{json}}
@@ -118,7 +118,7 @@ DELETE {{baseUrl}}/api/patients/{{createPatient.response.body.data.id}}
 ### Get it again → 404
 GET {{baseUrl}}/api/patients/{{createPatient.response.body.data.id}}
 
-### Delete a patient WITH appointments → 409 (refund history is kept)
+### Delete a patient who has appointments → 409 (their refund history is kept)
 DELETE {{baseUrl}}/api/patients/1
 
 ### Wrong method on an existing URL → 405 + Allow: GET, PATCH, DELETE
@@ -221,16 +221,16 @@ Content-Type: {{json}}
 ### Delete the new doctor → 204
 DELETE {{baseUrl}}/api/doctors/{{createDoctor.response.body.data.id}}
 
-### Delete a doctor WITH appointments → 409 (refund history is kept)
+### Delete a doctor who has appointments → 409 (their refund history is kept)
 DELETE {{baseUrl}}/api/doctors/1
 
 ### Wrong method on the collection → 405 + Allow: GET, POST
 DELETE {{baseUrl}}/api/doctors
 
 ############################################################
-# Appointments: booking (Phase 5)
-# Times are clinic wall-clock time, "YYYY-MM-DD HH:mm".
-# Reload the seed before a demo so the expected results below hold.
+# Booking appointments (Part C.2)
+# Times are clinic wall-clock time, written "YYYY-MM-DD HH:mm".
+# Reload the seed before a demo, or the expected results below won't match.
 ############################################################
 
 ### Book → 201 + Location; amountPaid defaults to the doctor's fee (100.00)
@@ -244,10 +244,10 @@ Content-Type: {{json}}
   "appointmentDateTime": "2027-05-03 10:00"
 }
 
-### Follow the Location header → 200 (includes apptRef, names, status BOOKED)
+### Follow the Location header → 200 (shows apptRef, both names and status BOOKED)
 GET {{baseUrl}}/api/appointments/{{bookAppointment.response.body.data.id}}
 
-### Book with a discount (AP-002 style) → 201, amountPaid 80
+### Book with a discount, like AP-002 in the spreadsheet → 201, amountPaid 80
 POST {{baseUrl}}/api/appointments
 Content-Type: {{json}}
 
@@ -269,7 +269,7 @@ Content-Type: {{json}}
   "amountPaid": 100.01
 }
 
-### DOUBLE BOOKING: same doctor + slot as above → 409 + waitlist offer (waitlistType "slot")
+### Double booking: same doctor and slot as above → 409 + waitlist offer (waitlistType "slot")
 POST {{baseUrl}}/api/appointments
 Content-Type: {{json}}
 
@@ -279,7 +279,7 @@ Content-Type: {{json}}
   "appointmentDateTime": "2027-05-03 10:00"
 }
 
-### Same, accepting the waitlist offer → 202 Accepted with the waitlist position (503 if Redis is down)
+### The same request, accepting the waitlist offer → 202 Accepted with the position (503 if Redis is down)
 POST {{baseUrl}}/api/appointments
 Content-Type: {{json}}
 
@@ -300,7 +300,7 @@ Content-Type: {{json}}
   "appointmentDateTime": "2027-05-03 10:00"
 }
 
-### Rebook a CANCELLED slot (Dr. Boateng 2027-03-22 14:00 only has a cancelled row) → 201
+### Book a slot that was cancelled (Dr. Boateng 2027-03-22 14:00 only has a cancelled row) → 201
 POST {{baseUrl}}/api/appointments
 Content-Type: {{json}}
 
@@ -310,7 +310,7 @@ Content-Type: {{json}}
   "appointmentDateTime": "2027-03-22 14:00"
 }
 
-### Dr. Boateng's busy day: 11 of 12 booked
+### Dr. Boateng's busy day: 11 of the 12 slots booked
 GET {{baseUrl}}/api/doctors/1/appointments?date=2027-03-15
 
 ### 12th booking that day → 201
@@ -323,7 +323,7 @@ Content-Type: {{json}}
   "appointmentDateTime": "2027-03-15 14:30"
 }
 
-### 13TH BOOKING → 409 "fully booked" + waitlist offer (waitlistType "day")
+### A 13th booking → 409 "fully booked" + waitlist offer (waitlistType "day")
 POST {{baseUrl}}/api/appointments
 Content-Type: {{json}}
 
@@ -333,7 +333,7 @@ Content-Type: {{json}}
   "appointmentDateTime": "2027-03-15 15:00"
 }
 
-### OUTSIDE HOURS: 17:00 (last slot starts 16:30) → 422
+### Outside working hours: 17:00 (the last slot starts at 16:30) → 422
 POST {{baseUrl}}/api/appointments
 Content-Type: {{json}}
 
@@ -373,7 +373,7 @@ Content-Type: {{json}}
   "appointmentDateTime": "2026-01-05 10:00"
 }
 
-### Past AND 17:45: every broken rule is listed → 422 with 3 details
+### In the past and at 17:45: every broken rule is listed → 422 with 3 details
 POST {{baseUrl}}/api/appointments
 Content-Type: {{json}}
 
@@ -403,7 +403,7 @@ Content-Type: {{json}}
   "appointmentDateTime": "2027-05-03 10:00:00"
 }
 
-### Bad body: string id, non-boolean joinWaitlist, unknown field, missing time → 400 listing all
+### Bad body: id as a string, joinWaitlist not a boolean, unknown field, no time → 400 listing them all
 POST {{baseUrl}}/api/appointments
 Content-Type: {{json}}
 
@@ -440,21 +440,21 @@ GET {{baseUrl}}/api/appointments/9999
 ### A doctor's day: bad date → 400
 GET {{baseUrl}}/api/doctors/1/appointments?date=2027-02-30
 
-# CONCURRENCY demos (terminal, with the API running):
-#   npm run demo:same-slot    20 simultaneous bookings for ONE slot  → 1 × 201, 19 × 409
-#   npm run demo:daily-cap    6 simultaneous bookings, room for 2    → 2 × 201, day stops at 12
-#   npm run demo:concurrency  both
+# Concurrency demos (run in a terminal while the API is running):
+#   npm run demo:same-slot    20 bookings at once for one slot  → 1 × 201, 19 × 409
+#   npm run demo:daily-cap    6 bookings at once, room for 2    → 2 × 201, the day stops at 12
+#   npm run demo:concurrency  runs both
 
 ############################################################
-# Cancellation + refunds (Phase 6)
-# The refund is computed by the SERVER from the notice (appointment time − clinic now):
+# Cancelling and refunds (Part C.3)
+# The server works out the refund from the notice given (appointment time − clinic now):
 #   > 48h → 100%   |   24h–48h inclusive → 50%   |   < 24h → 0%
-# LIVE TIER DEMO: the three bookings below use dates relative to TODAY on your PC
-# ($localDatetime = clinic time, Africa/Johannesburg). Run them between 09:00 and 16:00
-# so "today 16:30" is still in the future.
+# The three bookings below use dates relative to today on your PC
+# ($localDatetime = clinic time, Africa/Johannesburg). Run them between 09:00 and 16:00,
+# otherwise "today 16:30" is already in the past.
 ############################################################
 
-### Tier 0%: book TODAY 16:30 (< 24h notice) → 201
+### 0% tier: book today at 16:30 (under 24h notice) → 201
 # @name tierZero
 POST {{baseUrl}}/api/appointments
 Content-Type: {{json}}
@@ -468,7 +468,7 @@ Content-Type: {{json}}
 ### ... cancel it → 200, refundPercent 0, refundAmount 0
 PATCH {{baseUrl}}/api/appointments/{{tierZero.response.body.data.id}}/cancel
 
-### Tier 50%: book TOMORROW 16:30 (between 24h and 48h notice) → 201
+### 50% tier: book tomorrow at 16:30 (between 24h and 48h notice) → 201
 # @name tierHalf
 POST {{baseUrl}}/api/appointments
 Content-Type: {{json}}
@@ -482,7 +482,7 @@ Content-Type: {{json}}
 ### ... cancel it → 200, refundPercent 50, refundAmount 50 (fee 100.00)
 PATCH {{baseUrl}}/api/appointments/{{tierHalf.response.body.data.id}}/cancel
 
-### Tier 100%: book in 3 DAYS at 10:00 (always > 48h notice) → 201
+### 100% tier: book 3 days from now at 10:00 (always over 48h notice) → 201
 # @name tierFull
 POST {{baseUrl}}/api/appointments
 Content-Type: {{json}}
@@ -496,10 +496,10 @@ Content-Type: {{json}}
 ### ... cancel it → 200, refundPercent 100, refundAmount 100
 PATCH {{baseUrl}}/api/appointments/{{tierFull.response.body.data.id}}/cancel
 
-### Cancel the same appointment AGAIN → 422 "already cancelled"
+### Cancel the same appointment a second time → 422 "already cancelled"
 PATCH {{baseUrl}}/api/appointments/{{tierFull.response.body.data.id}}/cancel
 
-### The cancelled record is KEPT (status CANCELLED + refund columns) → 200
+### The cancelled record is still there (status CANCELLED plus the refund columns) → 200
 GET {{baseUrl}}/api/appointments/{{tierFull.response.body.data.id}}
 
 ### The freed slot is bookable again by another patient → 201
@@ -512,10 +512,10 @@ Content-Type: {{json}}
   "appointmentDateTime": "{{$localDatetime 'YYYY-MM-DD' 3 d}} 10:00"
 }
 
-### A seeded appointment (cancelled months ahead in the seed: 100%) is already cancelled → 422
+### A seed appointment that was already cancelled (100% refund) → 422
 PATCH {{baseUrl}}/api/appointments/12/cancel
 
-### The client may NOT send refund values → 400
+### The client can't send its own refund values → 400
 PATCH {{baseUrl}}/api/appointments/1/cancel
 Content-Type: {{json}}
 
@@ -533,8 +533,8 @@ PATCH {{baseUrl}}/api/appointments/abc/cancel
 DELETE {{baseUrl}}/api/appointments/1/cancel
 
 ############################################################
-# Waitlist + worker promotion (Phase 8)
-# Needs Redis (docker compose up -d) and the worker in a 2nd terminal: npm run worker
+# Waitlist and promotion by the worker (Part E)
+# Needs Redis (docker compose up -d) and the worker running in a second terminal: npm run worker
 ############################################################
 
 ### 1. Patient 5 takes Dr. Adjei's 2027-08-02 10:00 slot → 201
@@ -581,7 +581,7 @@ Content-Type: {{json}}
   "joinWaitlist": true
 }
 
-### 5. Patient 5 (who HOLDS the slot) tries to wait for it → 409
+### 5. Patient 5, who already has the slot, tries to join its waitlist → 409
 POST {{baseUrl}}/api/appointments
 Content-Type: {{json}}
 
@@ -592,10 +592,10 @@ Content-Type: {{json}}
   "joinWaitlist": true
 }
 
-### 6. See the waitlist: slot 2027-08-02 10:00 → patients [6, 7]
+### 6. Look at the waitlist: slot 2027-08-02 10:00 → patients [6, 7]
 GET {{baseUrl}}/api/doctors/2/waitlist
 
-### 7. PERMANENT-FAILURE setup: patient 6 books the same time with Dr. Boateng → 201
+### 7. Set up a permanent failure: patient 6 books the same time with Dr. Boateng → 201
 POST {{baseUrl}}/api/appointments
 Content-Type: {{json}}
 
@@ -605,14 +605,14 @@ Content-Type: {{json}}
   "appointmentDateTime": "2027-08-02 10:00"
 }
 
-### 8. Cancel patient 5 → slot-freed job. The worker tries patient 6 (busy → waitlist:failed),
-###    then books patient 7. Watch the worker terminal and logs/audit.log.
+### 8. Cancel patient 5 → slot-freed job. The worker tries patient 6 (busy, so waitlist:failed),
+###    then books patient 7. Watch the worker's terminal and logs/audit.log.
 PATCH {{baseUrl}}/api/appointments/{{waitA.response.body.data.id}}/cancel
 
-### 9. Patient 7 now holds the slot
+### 9. Patient 7 now has the slot
 GET {{baseUrl}}/api/doctors/2/appointments?date=2027-08-02
 
-### 10. Waitlist is empty; patient 6 is under "failed" with the reason (never lost)
+### 10. The waitlist is empty and patient 6 is under "failed" with the reason, not lost
 GET {{baseUrl}}/api/doctors/2/waitlist
 
 ### Waitlist: bad id → 400
@@ -624,25 +624,25 @@ GET {{baseUrl}}/api/doctors/9999/waitlist
 ### Waitlist: wrong method → 405
 POST {{baseUrl}}/api/doctors/2/waitlist
 
-# Day waitlist: fill a doctor-day to 12 (e.g. npm run demo:daily-cap prints the day), then
-# book a 13th with "joinWaitlist": true → 202 type "day"; cancel ANY booking that day →
-# the worker books the day-list patient into the freed slot.
+# Day waitlist: fill one doctor's day to 12 (npm run demo:daily-cap prints a day it filled),
+# then book a 13th with "joinWaitlist": true → 202 type "day". Cancel any booking that day
+# and the worker books the waiting patient into the freed slot.
 #
-# Redis down: `docker compose stop` → booking 201 and cancelling 200 still work (warning in the
-# server log), joinWaitlist / GET waitlist → 503. `docker compose up -d`: within a minute the
-# worker's waitlist sweep re-queues the promotion that was lost while Redis was down.
+# With Redis down (`docker compose stop`), booking (201) and cancelling (200) still work, with a
+# warning in the server log, while joinWaitlist and GET waitlist give 503. After `docker compose up -d`
+# the worker's sweep queues the lost promotion again within a minute.
 
 ############################################################
-# Statistics + reports (Phase 9): all figures computed in SQL
+# Statistics and reports (Parts C.4 to C.6). Every figure comes from SQL.
 ############################################################
 
-### Dr. Boateng's busy week: 2027-03-15 = 11 (91.7%), other days 0, window 11/84 = 13.1%, revenue 1620
+### Dr. Boateng's busy week: 2027-03-15 has 11 (91.7%), other days 0, window 11/84 = 13.1%, revenue 1620
 GET {{baseUrl}}/api/doctors/1/statistics?from=2027-03-15
 
-### Default window = the next 7 days from today (clinic clock)
+### With no ?from, the window is the next 7 days from today (clinic clock)
 GET {{baseUrl}}/api/doctors/1/statistics
 
-### Dr. Owusu-Ansah (no appointments): revenue 0, upcoming 0, seven zero days
+### Dr. Owusu-Ansah has no appointments: revenue 0, upcoming 0, and seven days of 0
 GET {{baseUrl}}/api/doctors/3/statistics
 
 ### Impossible ?from → 400
@@ -657,17 +657,17 @@ GET {{baseUrl}}/api/doctors/9999/statistics
 ### Wrong method → 405
 POST {{baseUrl}}/api/doctors/1/statistics
 
-### Doctors report: Boateng 13 / 1620, Adjei 3 / 300, Owusu-Ansah 0 / 0 (LEFT JOIN + COALESCE)
+### Doctors report: Boateng 13 / 1620, Adjei 3 / 300, and Owusu-Ansah still listed with 0 / 0
 GET {{baseUrl}}/api/reports/doctors
 
-### Busy days (> 80% of 12): Dr. Boateng 2027-03-15, 11 booked, 91.7%
+### Busy days (over 80% of 12): Dr. Boateng on 2027-03-15, 11 booked, 91.7%
 GET {{baseUrl}}/api/reports/busy-days
 
 ### Wrong method → 405
 DELETE {{baseUrl}}/api/reports/busy-days
 
 ############################################################
-# Feedback page (Phase 10): also open these in a browser
+# Feedback page (Part G). These are worth opening in a browser too.
 ############################################################
 
 ### English (default)
@@ -679,7 +679,7 @@ GET {{baseUrl}}/feedback?lang=fr
 ### Unsupported language → English, no crash
 GET {{baseUrl}}/feedback?lang=xx
 
-### Repeated lang (array) → English, no crash
+### lang given twice (arrives as an array) → English, no crash
 GET {{baseUrl}}/feedback?lang=fr&lang=en
 
 ############################################################

@@ -1,5 +1,5 @@
-// All SQL for the doctors table. Every value is a ? placeholder.
-// Rows are mapped from snake_case columns to camelCase API objects here.
+// All the SQL for the doctors table. Every value goes in through a ? placeholder.
+// Column names are snake_case in MySQL and camelCase in the API; the mapping happens here.
 const { pool } = require('../config/db');
 const { REMOVE_OUTCOME } = require('../config/constants');
 const { isRowReferenced } = require('../utils/dbErrorMap');
@@ -16,7 +16,7 @@ function toDoctor(row) {
 
 /** @returns {Promise<{items: object[], total: number}>} */
 async function findAll({ limit, offset }) {
-  // LIMIT/OFFSET as strings: see patientModel.findAll.
+  // LIMIT and OFFSET are passed as strings. patientModel.findAll explains why.
   const [rows] = await pool.execute(
     `SELECT id, full_name, specialty, consultation_fee, room
        FROM doctors ORDER BY id LIMIT ? OFFSET ?`,
@@ -45,7 +45,7 @@ async function create({ fullName, specialty, consultationFee, room }) {
 }
 
 /**
- * Partial update in one fixed statement (COALESCE keeps fields that weren't sent).
+ * Partial update in one fixed statement. COALESCE keeps any field that wasn't sent.
  * @returns {Promise<object|null>} null if the id doesn't exist
  */
 async function update(id, { fullName, specialty, consultationFee, room }) {
@@ -62,8 +62,8 @@ async function update(id, { fullName, specialty, consultationFee, room }) {
 }
 
 /**
- * fk_appt_doctor is ON DELETE RESTRICT, so MySQL refuses to delete a doctor who
- * has appointments (cancelled ones included); that is reported as HAS_APPOINTMENTS.
+ * fk_appt_doctor is ON DELETE RESTRICT, so MySQL won't delete a doctor who has
+ * appointments, even cancelled ones. That comes back as HAS_APPOINTMENTS.
  * @returns {Promise<string>} a REMOVE_OUTCOME value
  */
 async function remove(id) {

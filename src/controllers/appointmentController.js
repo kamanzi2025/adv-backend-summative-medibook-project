@@ -1,4 +1,5 @@
-// Appointments: booking, reading and cancelling. No try/catch: Express 5 forwards errors.
+// Booking, reading and cancelling appointments. There's no try/catch because
+// Express 5 passes rejected promises to the error handler by itself.
 const appointmentModel = require('../models/appointmentModel');
 const doctorModel = require('../models/doctorModel');
 const bookingEvents = require('../services/bookingEvents');
@@ -15,7 +16,7 @@ const {
 
 const { CANCEL_OUTCOME } = appointmentModel;
 
-// Which "full" outcomes come with a waitlist offer, and of which kind.
+// When the slot or the whole day is full, the 409 also offers the matching waitlist.
 const WAITLIST_FOR_OUTCOME = Object.freeze({
   [BOOKING_OUTCOME.SLOT_TAKEN]: WAITLIST_TYPE.SLOT,
   [BOOKING_OUTCOME.DAY_FULL]: WAITLIST_TYPE.DAY,
@@ -31,7 +32,7 @@ function waitlistOffer(type) {
   };
 }
 
-/** Turns a non-BOOKED outcome from the model into the right HTTP error. */
+/** Turns a failed booking result from the model into the right HTTP error. */
 function bookingFailure(result, input) {
   const when = formatClinicDateTime(input.appointmentDateTime);
   switch (result.outcome) {
@@ -62,9 +63,9 @@ function bookingFailure(result, input) {
 
 /** POST /api/appointments */
 async function bookAppointment(req, res) {
-  const input = validateBookingBody(req.body); // 400
+  const input = validateBookingBody(req.body); // throws 400
   const now = clinicNow();
-  assertSlotBookable(input.appointmentDateTime, now); // 422
+  assertSlotBookable(input.appointmentDateTime, now); // throws 422
 
   const slot = input.appointmentDateTime;
   const result = await appointmentModel.bookAppointment(buildBookingRequest({
@@ -76,7 +77,7 @@ async function bookAppointment(req, res) {
   }));
 
   if (result.outcome === BOOKING_OUTCOME.BOOKED) {
-    // Only after COMMIT: audit log + confirmation job (both never throw).
+    // Only after the commit: write the audit line and queue the confirmation. Neither can throw.
     await bookingEvents.onAppointmentBooked(result.appointment, { source: 'api' });
     res.status(HTTP_STATUS.CREATED)
       .location(`/api/appointments/${result.appointment.id}`)
@@ -107,7 +108,7 @@ async function getAppointment(req, res) {
   res.json({ data: appointment });
 }
 
-/** GET /api/doctors/:id/appointments?date=YYYY-MM-DD (default: today) */
+/** GET /api/doctors/:id/appointments?date=YYYY-MM-DD (today if no date) */
 async function listDoctorDay(req, res) {
   const doctorId = parseId(req.params.id);
   const date = parseDateQuery(req.query.date, clinicNow(), 'date');
@@ -123,7 +124,7 @@ async function listDoctorDay(req, res) {
   });
 }
 
-/** Turns a non-CANCELLED outcome from the model into the right HTTP error. */
+/** Turns a failed cancellation result from the model into the right HTTP error. */
 function cancelFailure(result, id) {
   switch (result.outcome) {
     case CANCEL_OUTCOME.NOT_FOUND:
@@ -140,15 +141,15 @@ function cancelFailure(result, id) {
   }
 }
 
-/** PATCH /api/appointments/:id/cancel (no body; the refund is computed server-side) */
+/** PATCH /api/appointments/:id/cancel (no body: the server works out the refund) */
 async function cancelAppointment(req, res) {
-  const id = parseId(req.params.id); // 400
-  assertEmptyCancelBody(req.body); // 400
+  const id = parseId(req.params.id); // throws 400
+  assertEmptyCancelBody(req.body); // throws 400
 
   const result = await appointmentModel.cancelAppointment({ appointmentId: id, now: clinicNow() });
   if (result.outcome !== CANCEL_OUTCOME.CANCELLED) throw cancelFailure(result, id);
 
-  // Only after COMMIT: audit log + slot-freed job (never throws).
+  // Only after the commit: write the audit line and queue the slot-freed job. Neither can throw.
   const { appointment, hoursNotice } = result;
   await bookingEvents.onAppointmentCancelled(appointment, { source: 'api', hoursNotice });
   res.json({ data: { ...appointment, hoursNotice } });

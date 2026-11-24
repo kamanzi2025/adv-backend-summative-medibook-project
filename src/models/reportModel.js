@@ -1,13 +1,13 @@
-// All SQL for the clinic-wide reports (README Part C.5 and C.6). Each report is ONE
-// query: the joins, counts, sums and percentages are produced by MySQL, and the rules
+// SQL for the two clinic reports (brief Parts C.5 and C.6). Each report is a single
+// query: MySQL does the joins, counts, sums and percentages, and the rule values
 // (statuses, daily cap, busy threshold) are passed in as ? parameters.
 const { pool } = require('../config/db');
 const { APPOINTMENT_STATUS, DAILY_CAP, BUSY_THRESHOLD } = require('../config/constants');
 const { REVENUE_COLLECTED } = require('./sqlFragments');
 
 /**
- * Every doctor, including doctors with zero appointments (LEFT JOIN + COALESCE),
- * highest revenue first, ties by id.
+ * Every doctor, including those with no appointments (LEFT JOIN + COALESCE).
+ * Highest revenue first; ties go by id.
  * @returns {Promise<object[]>}
  */
 async function findDoctorsReport() {
@@ -39,8 +39,8 @@ async function findDoctorsReport() {
 }
 
 /**
- * Every (doctor, date) whose BOOKED count is more than BUSY_THRESHOLD × DAILY_CAP,
- * in date order.
+ * Every (doctor, date) where the BOOKED count is above BUSY_THRESHOLD × DAILY_CAP,
+ * oldest date first.
  * @returns {Promise<object[]>}
  */
 async function findBusyDays() {

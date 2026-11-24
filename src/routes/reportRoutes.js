@@ -1,4 +1,4 @@
-// Mounted at /api/reports. Read-only reports: GET only, 405 for anything else.
+// Mounted at /api/reports. The reports are read-only, so GET only and 405 for anything else.
 const { Router } = require('express');
 const reportController = require('../controllers/reportController');
 const methodNotAllowed = require('../middleware/methodNotAllowed');

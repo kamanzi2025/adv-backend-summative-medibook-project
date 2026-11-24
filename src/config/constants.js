@@ -1,14 +1,14 @@
-// Every business rule number lives here, and only here.
-// This file is pure (no I/O, no dotenv), so unit tests can import it safely.
+// All the business numbers (daily cap, refund tiers, working hours...) are defined
+// here and nowhere else. The file does no I/O, so the unit tests can import it.
 
 const APPOINTMENT_STATUS = Object.freeze({
   BOOKED: 'BOOKED',
   CANCELLED: 'CANCELLED',
 });
 
-// Refund policy (README Part C.3). Boundaries are documented in DESIGN_NOTES.md:
+// Refund tiers (brief Part C.3). DESIGN_NOTES.md explains the boundaries:
 //   notice  > 48h        -> 100%
-//   24h <= notice <= 48h -> 50%   (exactly 48h and exactly 24h are both 50%)
+//   24h <= notice <= 48h -> 50%   (exactly 48h and exactly 24h both get 50%)
 //   notice  < 24h        -> 0%
 const REFUND_POLICY = Object.freeze({
   FULL: Object.freeze({ moreThanHours: 48, percent: 100 }),
@@ -16,8 +16,8 @@ const REFUND_POLICY = Object.freeze({
   NONE: Object.freeze({ percent: 0 }),
 });
 
-// What the booking model reports back. The controller turns these into HTTP
-// statuses; the waitlist worker turns them into promotion decisions.
+// Results the booking model can return. The controller turns them into HTTP
+// statuses and the waitlist worker uses them to decide what to do next.
 const BOOKING_OUTCOME = Object.freeze({
   BOOKED: 'BOOKED',
   DOCTOR_NOT_FOUND: 'DOCTOR_NOT_FOUND',
@@ -28,14 +28,14 @@ const BOOKING_OUTCOME = Object.freeze({
   PATIENT_DOUBLE_BOOKED: 'PATIENT_DOUBLE_BOOKED',
 });
 
-// What patientModel.remove / doctorModel.remove report back.
+// Results of patientModel.remove and doctorModel.remove.
 const REMOVE_OUTCOME = Object.freeze({
   DELETED: 'DELETED',
   NOT_FOUND: 'NOT_FOUND',
   HAS_APPOINTMENTS: 'HAS_APPOINTMENTS',
 });
 
-// Every HTTP status code the API sends, named once.
+// Status codes get names so the controllers don't contain bare numbers.
 const HTTP_STATUS = Object.freeze({
   OK: 200,
   CREATED: 201,
@@ -63,22 +63,20 @@ const AUDIT_EVENT = Object.freeze({
 });
 
 module.exports = Object.freeze({
-  // The clinic's IANA time zone when CLINIC_TIMEZONE is not set (see config/settings.js).
+  // Used when CLINIC_TIMEZONE isn't set in .env (see config/settings.js).
   DEFAULT_CLINIC_TIMEZONE: 'Africa/Johannesburg',
 
-  // Working day: slots start at WORKING_HOURS_START, the last one starts
-  // SLOT_MINUTES before WORKING_HOURS_END (i.e. 16:30).
-  // Mirrored by chk_appt_slot_minutes / chk_appt_working_hours in database/schema.sql:
-  // change both together.
+  // The first slot starts at 09:00 and the last one starts 30 minutes before
+  // closing, so at 16:30. The CHECK constraints chk_appt_slot_minutes and
+  // chk_appt_working_hours in schema.sql say the same thing, so change both together.
   WORKING_HOURS_START: '09:00',
   WORKING_HOURS_END: '17:00',
   SLOT_MINUTES: 30,
 
-  // Capacity rules.
   DAILY_CAP: 12,
   BUSY_THRESHOLD: 0.8,
 
-  // Doctor statistics: "next N days" window (today included).
+  // Statistics cover the next 7 days, today included.
   STATS_WINDOW_DAYS: 7,
 
   APPOINTMENT_STATUS,
@@ -89,73 +87,73 @@ module.exports = Object.freeze({
   WAITLIST_TYPE,
   AUDIT_EVENT,
 
-  // A booking transaction is retried at most this many times in total, and only
-  // for transient errors (deadlock, lock wait timeout, appt_ref collision).
+  // Total tries for one booking transaction. Only deadlocks, lock timeouts and an
+  // appt_ref collision are retried. Anything else fails straight away.
   BOOKING_MAX_ATTEMPTS: 3,
 
-  // appt_ref = PREFIX + YYYYMMDD + "-" + CODE_LENGTH random characters from ALPHABET,
-  // e.g. AP-20270315-K7Q2. Must match chk_appt_ref_format in database/schema.sql.
+  // appt_ref looks like AP-20270315-K7Q2: prefix, appointment date, dash, 4 random
+  // characters. If this changes, chk_appt_ref_format in schema.sql has to change too.
   APPT_REF: Object.freeze({
     PREFIX: 'AP-',
     CODE_LENGTH: 4,
     ALPHABET: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ',
   }),
 
-  // Input limits. Each one mirrors a column size in database/schema.sql.
+  // Each limit matches the column size in schema.sql, so a long value gets a clear
+  // 400 from the validator instead of a database error.
   FIELD_LIMITS: Object.freeze({
-    PERSON_NAME_MAX: 100, // patients.full_name, doctors.full_name VARCHAR(100)
-    EMAIL_MAX: 254, // patients.email VARCHAR(254)
-    PHONE_MAX: 20, // patients.phone VARCHAR(20)
-    SPECIALTY_MAX: 80, // doctors.specialty VARCHAR(80)
-    ROOM_MAX: 10, // doctors.room VARCHAR(10)
+    PERSON_NAME_MAX: 100, // full_name VARCHAR(100) in both tables
+    EMAIL_MAX: 254, // VARCHAR(254)
+    PHONE_MAX: 20, // VARCHAR(20)
+    SPECIALTY_MAX: 80, // VARCHAR(80)
+    ROOM_MAX: 10, // VARCHAR(10)
   }),
-  MONEY_MAX: 99999999.99, // largest DECIMAL(10,2) value
-  ID_MAX: 4294967295, // largest INT UNSIGNED value
+  MONEY_MAX: 99999999.99, // biggest value DECIMAL(10,2) can hold
+  ID_MAX: 4294967295, // biggest value INT UNSIGNED can hold
 
-  // GET-all pagination (?limit=&offset=).
+  // Defaults for ?limit=&offset= on the list endpoints.
   PAGINATION: Object.freeze({ DEFAULT_LIMIT: 20, MAX_LIMIT: 100 }),
 
-  // Audit log (Part D): one JSON line per event in <LOG_DIR>/<FILE_NAME>.
-  // LOG_DIR is read by config/settings.js, falling back to DEFAULT_DIR.
+  // Audit log (Part D). LOG_DIR in .env can move the folder; otherwise it's "logs".
   AUDIT_LOG: Object.freeze({ DEFAULT_DIR: 'logs', FILE_NAME: 'audit.log' }),
 
-  // BullMQ queue names (Part E). The web server only produces jobs;
-  // src/workers/worker.js (a separate process) consumes them.
+  // BullMQ queues (Part E). The web server only adds jobs. The worker process
+  // (src/workers/worker.js) is the one that runs them.
   QUEUE: Object.freeze({
     SLOT_FREED: 'slot-freed',
     SEND_CONFIRMATION: 'send-confirmation',
   }),
-  // Every job: up to ATTEMPTS tries, exponential backoff starting at
-  // BACKOFF_DELAY_MS, failed jobs kept (not removed) for inspection.
+  // A failed job is retried up to 5 times with exponential backoff from 2 seconds.
+  // Jobs that still fail are kept so I can inspect them.
   QUEUE_JOB_OPTIONS: Object.freeze({ ATTEMPTS: 5, BACKOFF_DELAY_MS: 2000 }),
-  // slot-freed runs one job at a time so two promotions never race for one slot.
+  // Promotions run one at a time, so two of them can never compete for the same freed slot.
   WORKER_CONCURRENCY: Object.freeze({ SLOT_FREED: 1, SEND_CONFIRMATION: 5 }),
-  // The worker re-runs the waitlist sweep this often (not only at start-up), so a
-  // "slot-freed" job lost while Redis was down is recovered without a restart.
+  // How often the worker repeats the waitlist sweep. This picks up a "slot-freed"
+  // job that was lost while Redis was down, without restarting anything.
   WAITLIST_SWEEP_INTERVAL_MS: 60000,
 
-  // Redis waitlist keys (plain Redis lists, FIFO: RPUSH to join, LMOVE ... LEFT to promote):
+  // Waitlist keys in Redis. Each one is a plain list used as a FIFO queue
+  // (RPUSH to join, LMOVE ... LEFT to take the first patient):
   //   <PREFIX>:<doctorId>:slot:<YYYY-MM-DDTHH:mm>   waiting for one exact slot
   //   <PREFIX>:<doctorId>:day:<YYYY-MM-DD>          waiting for any slot that day
   //   <waitlist key><PROCESSING_SUFFIX>             entries being promoted right now
-  //   FAILED                                        permanently failed promotions + reason
+  //   FAILED                                        promotions that can never work, with the reason
   WAITLIST_KEYS: Object.freeze({
     PREFIX: 'waitlist:doctor',
     PROCESSING_SUFFIX: ':processing',
     FAILED: 'waitlist:failed',
   }),
 
-  // GET /feedback (Part G): ?lang=<key>; unsupported values fall back to DEFAULT_LANGUAGE.
-  // Each language maps to the Intl locale used to format today's date.
+  // Feedback page (Part G). ?lang picks the language; anything unsupported gets
+  // English. Each language also has the Intl locale used to format the date.
   I18N: Object.freeze({
     DEFAULT_LANGUAGE: 'en',
     LOCALES: Object.freeze({ en: 'en-GB', fr: 'fr-FR' }),
   }),
 
-  // Redis client behaviour when Redis is unreachable.
+  // Reconnect delays when Redis is unreachable.
   REDIS_RETRY_STEP_MS: 500,
   REDIS_RETRY_MAX_MS: 5000,
 
-  // mysql2 pool size.
   DB_CONNECTION_LIMIT: 10,
 });

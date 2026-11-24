@@ -1,5 +1,5 @@
-// Patients: validate input, call the model, choose the status code.
-// No try/catch: Express 5 forwards rejected promises to the error middleware.
+// Patients: validate the input, call the model, pick the status code.
+// Express 5 forwards rejected promises to the error handler, so no try/catch.
 const patientModel = require('../models/patientModel');
 const AppError = require('../utils/AppError');
 const { parseId, parsePagination } = require('../validators/common');

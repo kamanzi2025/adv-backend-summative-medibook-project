@@ -1,5 +1,5 @@
-// Pure HTML rendering for GET /feedback. Every inserted value goes through
-// escapeHtml, so locale text (or anything else) can never inject markup.
+// Builds the HTML for GET /feedback. Every value put into the page goes through
+// escapeHtml, so nothing in a locale file can inject markup.
 
 const ANSWER_ROWS = 5;
 
@@ -11,7 +11,7 @@ const HTML_ESCAPES = Object.freeze({
   "'": '&#39;',
 });
 
-/** Escapes & < > " ' for use in HTML text and quoted attribute values. */
+/** Escapes & < > " ' so text is safe in HTML and inside quoted attributes. */
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
 }
@@ -31,16 +31,16 @@ function renderLanguageLink({ key, name }, activeLanguage) {
 
 /**
  * @param {object} args
- * @param {string} args.language   active language key, e.g. "fr"
- * @param {object} args.texts      the active locale file's texts
- * @param {string} args.todayText  today's date formatted for the language
+ * @param {string} args.language   the active language, e.g. "fr"
+ * @param {object} args.texts      that language's locale file
+ * @param {string} args.todayText  today's date written in that language
  * @param {string} args.todayIso   today's date as "YYYY-MM-DD" (for <time datetime>)
- * @param {Array<{key: string, name: string}>} args.languages  for the language switch
+ * @param {Array<{key: string, name: string}>} args.languages  for the language links
  * @returns {string} a complete HTML document
  *
- * The form submits with GET back to /feedback and keeps the language (hidden `lang`):
- * the brief asks for a static page, so there is no handler that stores answers, and
- * the server simply ignores the q1..q5 query parameters.
+ * The form submits with GET back to /feedback and keeps the language in a hidden
+ * `lang` field. The brief only asks for the page, so nothing stores the answers;
+ * the server just ignores q1..q5 in the query string.
  */
 function renderFeedbackPage({ language, texts, todayText, todayIso, languages }) {
   const links = languages.map((entry) => renderLanguageLink(entry, language)).join(' | ');

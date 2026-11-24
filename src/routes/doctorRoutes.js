@@ -16,7 +16,7 @@ router.route('/:id')
   .delete(doctorController.deleteDoctor)
   .all(methodNotAllowed(['GET', 'PATCH', 'DELETE']));
 
-// A doctor's appointments on one day: ?date=YYYY-MM-DD (default: today).
+// One doctor's appointments for a day: ?date=YYYY-MM-DD, today if left out.
 router.route('/:id/appointments')
   .get(appointmentController.listDoctorDay)
   .all(methodNotAllowed(['GET']));

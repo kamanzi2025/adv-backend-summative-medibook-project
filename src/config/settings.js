@@ -1,16 +1,15 @@
-// Optional settings with safe defaults, read from process.env at CALL time.
-// config/env.js owns the required connection settings and loads .env; this module
-// owns the optional ones that pure modules need (clock, i18n, audit logger).
-// Reading lazily means .env is always applied whatever the require order, and unit
-// tests can import those modules without any .env file. Nothing else reads process.env.
+// Optional settings that have a default. They're read from process.env when the
+// function is called, not when the file loads. That way .env is always applied
+// whatever order files are required in, and the tests can use the clock, i18n
+// and audit logger without a .env file. Nothing else in the app reads process.env.
 const { DEFAULT_CLINIC_TIMEZONE, AUDIT_LOG } = require('./constants');
 
-/** IANA time zone of the clinic's wall clock (CLINIC_TIMEZONE). */
+/** The clinic's IANA time zone, from CLINIC_TIMEZONE. */
 function clinicTimezone() {
   return process.env.CLINIC_TIMEZONE || DEFAULT_CLINIC_TIMEZONE;
 }
 
-/** Directory of audit.log (LOG_DIR), relative to the project root unless absolute. */
+/** Folder for audit.log, from LOG_DIR. A relative path starts at the project root. */
 function logDir() {
   return process.env.LOG_DIR || AUDIT_LOG.DEFAULT_DIR;
 }

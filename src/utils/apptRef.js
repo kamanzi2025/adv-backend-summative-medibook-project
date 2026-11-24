@@ -1,12 +1,12 @@
-// Human-readable appointment reference, generated in Node BEFORE the insert:
-// AP-20270315-K7Q2 = prefix + appointment date + random code.
+// The readable appointment reference, made in Node before the insert.
+// AP-20270315-K7Q2 is the prefix, the appointment date and a random code.
 const { randomInt } = require('node:crypto');
 const { APPT_REF } = require('../config/constants');
 const { toSqlDate } = require('./clock');
 
 /**
  * @param {Date} slot  clinic Date of the appointment
- * @param {(max: number) => number} [random=randomInt]  injectable for tests
+ * @param {(max: number) => number} [random=randomInt]  the tests pass a fixed one
  * @returns {string}
  */
 function generateApptRef(slot, random = randomInt) {

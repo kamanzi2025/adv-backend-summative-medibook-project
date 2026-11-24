@@ -1,4 +1,4 @@
-// All SQL for the appointments table. Every value is a ? placeholder.
+// All the SQL for the appointments table. Every value goes in through a ? placeholder.
 const { pool } = require('../config/db');
 const { APPOINTMENT_STATUS, BOOKING_OUTCOME, BOOKING_MAX_ATTEMPTS } = require('../config/constants');
 const { duplicateKeyName } = require('../utils/dbErrorMap');
@@ -6,7 +6,7 @@ const { resolveAmountPaid } = require('../utils/payment');
 const { calculateRefund } = require('../utils/refund');
 const { parseClinicDateTime, toSqlDateTime } = require('../utils/clock');
 
-// What cancelAppointment reports back; the controller maps these to HTTP statuses.
+// Results cancelAppointment can return. The controller maps them to HTTP statuses.
 const CANCEL_OUTCOME = Object.freeze({
   CANCELLED: 'CANCELLED',
   NOT_FOUND: 'NOT_FOUND',
@@ -14,11 +14,11 @@ const CANCEL_OUTCOME = Object.freeze({
   ALREADY_STARTED: 'ALREADY_STARTED',
 });
 
-// Transient lock errors: safe to retry the whole transaction.
+// Lock errors that go away if you simply try again, so the whole transaction is retried.
 const RETRYABLE_LOCK_ERRORS = new Set(['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT']);
 
-// One appointment row with its patient and doctor names; shared by every read below.
-// Constant SQL text only (no request data): the WHERE values are ? placeholders.
+// One appointment with the patient's and doctor's names, used by every read below.
+// The SQL text is fixed; the WHERE values are always ? placeholders.
 const APPOINTMENT_SELECT = `
   SELECT a.id, a.appt_ref, a.patient_id, p.full_name AS patient_name,
          a.doctor_id, d.full_name AS doctor_name, a.appt_datetime, a.amount_paid,
@@ -35,7 +35,7 @@ function toAppointment(row) {
     patientName: row.patient_name,
     doctorId: row.doctor_id,
     doctorName: row.doctor_name,
-    // DATETIME strings (dateStrings: true) are clinic wall-clock times.
+    // DATETIME comes back as text (dateStrings: true), already in clinic time.
     appointmentDateTime: row.appt_datetime.slice(0, 16),
     amountPaid: row.amount_paid,
     status: row.status,
@@ -53,8 +53,8 @@ async function findById(id) {
 }
 
 /**
- * Every appointment (BOOKED and CANCELLED) of one doctor in [dayStart, dayEnd).
- * The half-open range keeps the query sargable, so idx_appt_doctor_datetime is used.
+ * All of one doctor's appointments (booked and cancelled) from dayStart up to dayEnd.
+ * Comparing the raw column with >= and < lets MySQL use idx_appt_doctor_datetime.
  */
 async function findByDoctorBetween(doctorId, dayStart, dayEnd) {
   const [rows] = await pool.execute(
@@ -67,8 +67,8 @@ async function findByDoctorBetween(doctorId, dayStart, dayEnd) {
 }
 
 /**
- * Does the patient already hold a BOOKED appointment (with any doctor) at this time?
- * Uses uq_appt_patient_active_slot. Used by the waitlist to refuse pointless joins.
+ * Is the patient already booked with any doctor at this time? The waitlist uses this
+ * to refuse a join that could never succeed (it's the uq_appt_patient_active_slot rule).
  * @param {number} patientId
  * @param {string} appointmentDateTime  "YYYY-MM-DD HH:mm:ss" clinic time
  */
@@ -89,19 +89,19 @@ async function rollbackQuietly(conn) {
 }
 
 /**
- * ONE booking transaction. Returns an outcome object for every business result;
- * throws only for unexpected/transient database errors.
+ * One try at the booking transaction. Every business result comes back as an outcome;
+ * it only throws for unexpected or temporary database errors.
  */
 async function attemptBooking(request) {
   const conn = await pool.getConnection();
   try {
-    // READ COMMITTED: once this transaction holds the doctor lock, every later
-    // read sees the latest committed bookings (no stale snapshot).
+    // READ COMMITTED: once we hold the doctor lock, every read after it sees the
+    // latest committed bookings instead of an older snapshot.
     await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
     await conn.beginTransaction();
 
-    // 1. Lock the doctor row. Every booking for this doctor queues here, one at a
-    //    time, so the count in step 4 can't be raced.
+    // 1. Lock the doctor row. Bookings for the same doctor wait here and go through
+    //    one at a time, so two of them can't both pass the count in step 4.
     const [doctorRows] = await conn.execute(
       'SELECT consultation_fee FROM doctors WHERE id = ? FOR UPDATE',
       [request.doctorId],
@@ -111,14 +111,14 @@ async function attemptBooking(request) {
       return { outcome: BOOKING_OUTCOME.DOCTOR_NOT_FOUND };
     }
 
-    // 2. The patient must exist.
+    // 2. Check the patient exists.
     const [patientRows] = await conn.execute('SELECT id FROM patients WHERE id = ?', [request.patientId]);
     if (patientRows.length === 0) {
       await conn.rollback();
       return { outcome: BOOKING_OUTCOME.PATIENT_NOT_FOUND };
     }
 
-    // 3. What is paid: the fee by default, never more than the fee.
+    // 3. Work out the amount paid: the fee by default, a discount allowed, never more than the fee.
     const fee = doctorRows[0].consultation_fee;
     const payment = resolveAmountPaid(request.amountPaid, fee);
     if (payment.error) {
@@ -126,7 +126,7 @@ async function attemptBooking(request) {
       return { outcome: BOOKING_OUTCOME.AMOUNT_EXCEEDS_FEE, fee };
     }
 
-    // 4. Daily cap: count this doctor's BOOKED appointments on that day.
+    // 4. Daily cap: how many BOOKED appointments does the doctor already have that day?
     const [[{ bookedCount }]] = await conn.execute(
       `SELECT COUNT(*) AS bookedCount
          FROM appointments
@@ -138,8 +138,8 @@ async function attemptBooking(request) {
       return { outcome: BOOKING_OUTCOME.DAY_FULL, bookedCount };
     }
 
-    // 5. Insert. uq_appt_doctor_active_slot / uq_appt_patient_active_slot are the
-    //    final guarantee: a duplicate raises ER_DUP_ENTRY instead of saving.
+    // 5. Insert. If the lock were ever missing, the unique indexes on active_slot
+    //    would still reject a double booking with ER_DUP_ENTRY.
     const [result] = await conn.execute(
       `INSERT INTO appointments
          (appt_ref, patient_id, doctor_id, appt_datetime, amount_paid, status, booked_on)
@@ -166,8 +166,8 @@ async function attemptBooking(request) {
 }
 
 /**
- * Books one appointment with every rule enforced inside a transaction.
- * Used by the API controller AND by the waitlist worker.
+ * Books one appointment, with every rule checked inside a transaction.
+ * Both the API and the waitlist worker book through this function.
  *
  * @param {object} request
  * @param {number} request.patientId
@@ -178,7 +178,7 @@ async function attemptBooking(request) {
  * @param {number} [request.amountPaid]         defaults to the doctor's fee
  * @param {string} request.bookedOn             clinic "now", "YYYY-MM-DD HH:mm:ss"
  * @param {number} request.dailyCap
- * @param {() => string} request.generateRef    new appt_ref for each attempt
+ * @param {() => string} request.generateRef    makes a fresh appt_ref for each try
  * @returns {Promise<{ outcome: string, appointment?: object, fee?: number, bookedCount?: number }>}
  */
 async function bookAppointment(request) {
@@ -191,7 +191,7 @@ async function bookAppointment(request) {
       const key = err.code === 'ER_DUP_ENTRY' ? duplicateKeyName(err) : null;
       if (key === 'uq_appt_doctor_active_slot') return { outcome: BOOKING_OUTCOME.SLOT_TAKEN };
       if (key === 'uq_appt_patient_active_slot') return { outcome: BOOKING_OUTCOME.PATIENT_DOUBLE_BOOKED };
-      // The patient was deleted between step 2 and the insert (fk_appt_patient).
+      // The patient was deleted between step 2 and the insert, so the foreign key refused it.
       if (err.code === 'ER_NO_REFERENCED_ROW_2') return { outcome: BOOKING_OUTCOME.PATIENT_NOT_FOUND };
 
       const retryable = key === 'uq_appt_ref' || RETRYABLE_LOCK_ERRORS.has(err.code);
@@ -202,25 +202,25 @@ async function bookAppointment(request) {
 }
 
 /**
- * Cancels one appointment in ONE transaction and records the refund.
- * The row is locked (FOR UPDATE) and its status re-checked under the lock, so two
- * concurrent cancels can't both succeed. The record is kept: active_slot becomes
- * NULL (generated column), so the slot is immediately re-bookable.
+ * Cancels one appointment and records the refund in a single transaction.
+ * The row is locked and its status checked again under the lock, so if two
+ * cancels arrive together only one succeeds. The row itself is kept; active_slot
+ * turns NULL, which frees the slot for someone else straight away.
  *
  * @param {object} params
  * @param {number} params.appointmentId
- * @param {Date} params.now  clinic Date (clinicNow()), never the DB clock
+ * @param {Date} params.now  clinic Date from clinicNow(), never the database clock
  * @returns {Promise<{ outcome: string, appointment?: object, hoursNotice?: number,
  *   cancelledAt?: string, appointmentDateTime?: string }>}
  */
 async function cancelAppointment({ appointmentId, now }) {
   const conn = await pool.getConnection();
   try {
-    // READ COMMITTED: the locked read below always sees the latest committed row.
+    // READ COMMITTED so the locked read below sees the latest committed row.
     await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
     await conn.beginTransaction();
 
-    // 1. Lock the row: a concurrent cancel of the same appointment waits here.
+    // 1. Lock the row. A second cancel of the same appointment waits here.
     const [rows] = await conn.execute(
       `SELECT id, status, appt_datetime, amount_paid, cancelled_at
          FROM appointments
@@ -233,14 +233,14 @@ async function cancelAppointment({ appointmentId, now }) {
       return { outcome: CANCEL_OUTCOME.NOT_FOUND };
     }
 
-    // 2. Re-check the status under the lock (the loser of a race sees CANCELLED).
+    // 2. Check the status again now that we hold the lock. Whoever loses a race sees CANCELLED.
     const row = rows[0];
     if (row.status === APPOINTMENT_STATUS.CANCELLED) {
       await conn.rollback();
       return { outcome: CANCEL_OUTCOME.ALREADY_CANCELLED, cancelledAt: row.cancelled_at };
     }
 
-    // 3. An appointment that has started (or passed) can't be cancelled.
+    // 3. You can't cancel an appointment that has already started.
     const appointmentDateTime = row.appt_datetime.slice(0, 16);
     const appointmentDate = parseClinicDateTime(appointmentDateTime);
     if (appointmentDate.getTime() <= now.getTime()) {
@@ -248,8 +248,8 @@ async function cancelAppointment({ appointmentId, now }) {
       return { outcome: CANCEL_OUTCOME.ALREADY_STARTED, appointmentDateTime };
     }
 
-    // 4. Refund computed server-side (pure policy), saved with the status in ONE
-    //    statement so chk_appt_status_consistency sees all four columns together.
+    // 4. Work out the refund here on the server and save it together with the status in
+    //    one UPDATE, so chk_appt_status_consistency sees all four columns change at once.
     const refund = calculateRefund(row.amount_paid, appointmentDate, now);
     const [result] = await conn.execute(
       `UPDATE appointments

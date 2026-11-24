@@ -1,12 +1,11 @@
--- =====================================================================
--- MediBook: database schema (MySQL 8.0+, InnoDB, utf8mb4)
--- Exactly 3 tables, in FK-safe order: patients, doctors, appointments.
--- Must match docs/schema.dbml and docs/schema-diagram.md exactly
--- (same columns, types and constraint names).
+-- MediBook database schema (MySQL 8.0+, InnoDB, utf8mb4).
 --
--- Run as root (or any account allowed to DROP/CREATE DATABASE).
--- WARNING: drops and re-creates the medibook database.
--- =====================================================================
+-- Exactly 3 tables, created in an order the foreign keys allow: patients,
+-- doctors, then appointments. The columns, types and constraint names match
+-- schema-diagram.png, docs/schema.dbml and docs/schema-diagram.md.
+--
+-- Run it as root (or another account that can drop and create databases).
+-- Careful: it deletes the medibook database and builds it again from scratch.
 
 DROP DATABASE IF EXISTS medibook;
 CREATE DATABASE medibook
@@ -14,10 +13,8 @@ CREATE DATABASE medibook
   COLLATE utf8mb4_0900_ai_ci;
 USE medibook;
 
--- ---------------------------------------------------------------------
--- patients: one row per person (removes the repeated patient columns
--- from the spreadsheet).
--- ---------------------------------------------------------------------
+-- patients: one row per person. In the spreadsheet a patient's name, email
+-- and phone were repeated on every appointment row.
 CREATE TABLE patients (
   id         INT UNSIGNED  NOT NULL AUTO_INCREMENT,
   full_name  VARCHAR(100)  NOT NULL,
@@ -31,10 +28,8 @@ CREATE TABLE patients (
   CONSTRAINT chk_patient_phone_format   CHECK (REGEXP_LIKE(phone, '^[+]?[0-9][0-9 ()-]{5,18}[0-9]$'))
 ) ENGINE = InnoDB;
 
--- ---------------------------------------------------------------------
--- doctors: specialty, fee and room depend only on the doctor, so they
--- live here, not on every appointment.
--- ---------------------------------------------------------------------
+-- doctors: specialty, fee and room depend only on the doctor, so they're
+-- stored once here instead of on every appointment.
 CREATE TABLE doctors (
   id                INT UNSIGNED   NOT NULL AUTO_INCREMENT,
   full_name         VARCHAR(100)   NOT NULL,
@@ -50,19 +45,16 @@ CREATE TABLE doctors (
   CONSTRAINT chk_doctor_fee_positive        CHECK (consultation_fee > 0)
 ) ENGINE = InnoDB;
 
--- ---------------------------------------------------------------------
--- appointments: links one patient to one doctor at one slot.
--- Cancellation + refund data are COLUMNS here (no extra tables allowed);
--- a cancelled row is kept forever as refund history.
+-- appointments: one patient with one doctor at one slot.
+-- We're only allowed 3 tables, so the cancellation and refund details are
+-- columns here. A cancelled row is never deleted; it's the refund history.
 --
--- active_slot is a STORED generated column:
+-- active_slot is a stored generated column:
 --   status = 'BOOKED'    -> active_slot = appt_datetime
 --   status = 'CANCELLED' -> active_slot = NULL
--- UNIQUE (doctor_id, active_slot) therefore blocks two BOOKED rows for
--- the same doctor + slot, while any number of CANCELLED rows (NULL never
--- equals NULL in a UNIQUE index) can share that slot, so a cancelled slot
--- is immediately re-bookable.
--- ---------------------------------------------------------------------
+-- So UNIQUE (doctor_id, active_slot) stops two booked rows for the same doctor
+-- and slot. Cancelled rows all have NULL there, and a UNIQUE index never treats
+-- two NULLs as equal, so a cancelled slot can be booked again straight away.
 CREATE TABLE appointments (
   id              INT UNSIGNED                 NOT NULL AUTO_INCREMENT,
   appt_ref        VARCHAR(16)                  NOT NULL,
@@ -81,9 +73,9 @@ CREATE TABLE appointments (
   CONSTRAINT pk_appointments PRIMARY KEY (id),
   CONSTRAINT uq_appt_ref     UNIQUE (appt_ref),
 
-  -- Business rule: a doctor can never have two ACTIVE appointments at the same date/time.
+  -- A doctor can never have two active appointments at the same date and time.
   CONSTRAINT uq_appt_doctor_active_slot  UNIQUE (doctor_id, active_slot),
-  -- Business rule: a patient can never hold two ACTIVE appointments at the same date/time.
+  -- A patient can't be booked in two places at the same date and time either.
   CONSTRAINT uq_appt_patient_active_slot UNIQUE (patient_id, active_slot),
 
   CONSTRAINT fk_appt_patient FOREIGN KEY (patient_id) REFERENCES patients (id)
@@ -91,31 +83,31 @@ CREATE TABLE appointments (
   CONSTRAINT fk_appt_doctor  FOREIGN KEY (doctor_id)  REFERENCES doctors (id)
     ON DELETE RESTRICT ON UPDATE RESTRICT,
 
-  -- Slot shape: 30-minute boundaries, whole minutes, 09:00 to 16:30 (last start).
+  -- Slots start on the hour or half hour, with no seconds, from 09:00 to 16:30 (the last start).
   CONSTRAINT chk_appt_slot_minutes  CHECK (MINUTE(appt_datetime) IN (0, 30)),
   CONSTRAINT chk_appt_slot_seconds  CHECK (SECOND(appt_datetime) = 0),
   CONSTRAINT chk_appt_working_hours CHECK (TIME(appt_datetime) BETWEEN '09:00:00' AND '16:30:00'),
 
-  -- Format of the human-readable reference, e.g. AP-20270315-K7Q2 (case-sensitive match).
+  -- The reference looks like AP-20270315-K7Q2. The 'c' makes the match case-sensitive.
   CONSTRAINT chk_appt_ref_format CHECK (REGEXP_LIKE(appt_ref, '^AP-[0-9]{8}-[0-9A-Z]{4}$', 'c')),
 
-  -- Money.
+  -- Money rules.
   CONSTRAINT chk_appt_amount_paid_non_negative CHECK (amount_paid >= 0),
   CONSTRAINT chk_appt_refund_percent_range     CHECK (refund_percent BETWEEN 0 AND 100),
   CONSTRAINT chk_appt_refund_within_paid       CHECK (refund_amount BETWEEN 0 AND amount_paid),
   CONSTRAINT chk_appt_refund_matches_percent   CHECK (refund_amount = ROUND(amount_paid * refund_percent / 100, 2)),
 
-  -- Status consistency: BOOKED rows carry no cancellation data,
-  -- CANCELLED rows must carry ALL of it (cancellation + refund together).
+  -- A booked row has no cancellation details at all. A cancelled row must have
+  -- all of them, so a cancellation can't be saved without its refund.
   CONSTRAINT chk_appt_status_consistency CHECK (
        (status = 'BOOKED'    AND cancelled_at IS NULL     AND refund_percent IS NULL     AND refund_amount IS NULL)
     OR (status = 'CANCELLED' AND cancelled_at IS NOT NULL AND refund_percent IS NOT NULL AND refund_amount IS NOT NULL)
   ),
 
-  -- Timeline: booked before the slot starts; cancelled after it was booked.
+  -- Dates in the right order: booked before the slot, cancelled after booking.
   CONSTRAINT chk_appt_booked_before_slot     CHECK (booked_on < appt_datetime),
   CONSTRAINT chk_appt_cancelled_after_booked CHECK (cancelled_at >= booked_on),
 
-  -- Speeds up the per-doctor per-day counts used by booking and the reports.
+  -- Speeds up counting a doctor's bookings per day, for booking and for the reports.
   INDEX idx_appt_doctor_datetime (doctor_id, appt_datetime)
 ) ENGINE = InnoDB;

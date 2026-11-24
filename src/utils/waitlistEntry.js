@@ -1,7 +1,7 @@
-// The JSON stored in a waitlist list. Pure module, safe for unit tests.
+// The JSON saved for each patient on a waitlist. Pure, so the tests can use it.
 // Entry: { patientId, doctorId, requestedDateTime: "YYYY-MM-DD HH:mm", type, joinedAt: ISO instant }
-// A day-list entry keeps the requested time for information only: it is promoted
-// into whatever slot frees up that day.
+// On a day list the requested time is just for information: the patient gets
+// whichever slot frees up that day.
 const { WAITLIST_TYPE } = require('../config/constants');
 
 const WAITLIST_TYPES = new Set(Object.values(WAITLIST_TYPE));
@@ -19,8 +19,8 @@ function buildEntry({ type, patientId, doctorId, appointmentDateTime, joinedAt }
 }
 
 /**
- * Stored JSON -> entry, or null if it is not a readable waitlist entry.
- * Extra fields (reason, failedAt, sourceList on failed entries) are kept.
+ * Parses the stored JSON back into an entry, or returns null if it isn't a valid one.
+ * Extra fields (reason, failedAt and sourceList on failed entries) are kept.
  */
 function parseEntry(raw) {
   let entry;

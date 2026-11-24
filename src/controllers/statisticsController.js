@@ -1,5 +1,5 @@
-// Doctor statistics. Validates input, takes "now"/"today" from the clinic clock,
-// and lets the model's SQL compute every figure. No try/catch: Express 5 forwards errors.
+// Doctor statistics. The controller validates the input and supplies "now" from
+// the clinic clock. Every figure is calculated by the SQL in the model.
 const statisticsModel = require('../models/statisticsModel');
 const AppError = require('../utils/AppError');
 const {
@@ -8,13 +8,14 @@ const {
 const { parseId, parseDateQuery } = require('../validators/common');
 const { DAILY_CAP, STATS_WINDOW_DAYS } = require('../config/constants');
 
-/** GET /api/doctors/:id/statistics?from=YYYY-MM-DD (default: today, clinic time) */
+/** GET /api/doctors/:id/statistics?from=YYYY-MM-DD (today in clinic time if left out) */
 async function getDoctorStatistics(req, res) {
   const doctorId = parseId(req.params.id);
   const now = clinicNow();
   const from = parseDateQuery(req.query.from, now, 'from');
 
-  // Half-open window [from 00:00, from + STATS_WINDOW_DAYS 00:00): sargable in SQL.
+  // The window runs from 00:00 on the first day up to, but not including, 00:00
+  // after the last day. Comparing the raw column like that lets MySQL use the index.
   const fromDate = toSqlDate(from);
   const summary = await statisticsModel.findDoctorSummary({
     doctorId,

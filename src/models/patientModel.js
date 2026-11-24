@@ -1,5 +1,5 @@
-// All SQL for the patients table. Every value is a ? placeholder.
-// Rows are mapped from snake_case columns to camelCase API objects here.
+// All the SQL for the patients table. Every value goes in through a ? placeholder.
+// Column names are snake_case in MySQL and camelCase in the API; the mapping happens here.
 const { pool } = require('../config/db');
 const { REMOVE_OUTCOME } = require('../config/constants');
 const { isRowReferenced } = require('../utils/dbErrorMap');
@@ -15,8 +15,8 @@ function toPatient(row) {
 
 /** @returns {Promise<{items: object[], total: number}>} */
 async function findAll({ limit, offset }) {
-  // LIMIT/OFFSET are sent as strings: MySQL 8 rejects JS numbers (sent as DOUBLE)
-  // for LIMIT placeholders in prepared statements.
+  // LIMIT and OFFSET are sent as strings because MySQL 8 rejects a JS number
+  // (sent as a DOUBLE) for a LIMIT placeholder in a prepared statement.
   const [rows] = await pool.execute(
     'SELECT id, full_name, email, phone FROM patients ORDER BY id LIMIT ? OFFSET ?',
     [String(limit), String(offset)],
@@ -44,9 +44,10 @@ async function create({ fullName, email, phone }) {
 }
 
 /**
- * Partial update in ONE fixed statement: a field that wasn't sent is passed as
- * NULL and COALESCE keeps the current value (every column is NOT NULL, so NULL
- * is never a real new value). No read-modify-write race, no dynamic SQL.
+ * Partial update in one fixed statement. A field that wasn't sent is passed as NULL
+ * and COALESCE keeps the current value. Every column is NOT NULL, so NULL can never
+ * be a real new value. This avoids building SQL from strings, and there's no
+ * separate read-then-write for another request to slip in between.
  * @returns {Promise<object|null>} the updated patient, or null if the id doesn't exist
  */
 async function update(id, { fullName, email, phone }) {
@@ -58,13 +59,13 @@ async function update(id, { fullName, email, phone }) {
       WHERE id = ?`,
     [fullName ?? null, email ?? null, phone ?? null, id],
   );
-  // mysql2 sets CLIENT_FOUND_ROWS, so affectedRows = rows MATCHED (even if unchanged).
+  // mysql2 sets CLIENT_FOUND_ROWS, so affectedRows counts matched rows, even when nothing changed.
   return result.affectedRows > 0 ? findById(id) : null;
 }
 
 /**
- * fk_appt_patient is ON DELETE RESTRICT, so MySQL refuses to delete a patient who
- * has appointments (cancelled ones included); that is reported as HAS_APPOINTMENTS.
+ * fk_appt_patient is ON DELETE RESTRICT, so MySQL won't delete a patient who has
+ * appointments, even cancelled ones. That comes back as HAS_APPOINTMENTS.
  * @returns {Promise<string>} a REMOVE_OUTCOME value
  */
 async function remove(id) {
