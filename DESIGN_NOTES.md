@@ -109,7 +109,7 @@ So here's what I decided:
 3. `clinicNow()` uses `Intl.DateTimeFormat` with `CLINIC_TIMEZONE` (read by `src/config/settings.js`),
    so it gives the right answer whatever time zone the PC or container is set to.
 4. Inside the code, a "clinic Date" is a JS `Date` whose UTC fields hold the clinic's wall-clock
-   time, so 09:00 in Johannesburg is held as `09:00Z`. All the date maths (hours of notice, adding
+   time, so 09:00 in Johannesburg is held as `09:00Z`. All the date math (hours of notice, adding
    days) uses the UTC fields. They have no daylight-saving jumps, so the host's time zone can never
    shift anything.
 5. mysql2 is set to `dateStrings: true`, so DATETIME values come back as exactly the text that was
@@ -244,7 +244,7 @@ and another candidate key.
 | Column(s) | Type | Why |
 |---|---|---|
 | ids | `INT UNSIGNED AUTO_INCREMENT` | never negative, and 4 billion rows is plenty |
-| money (`consultation_fee`, `amount_paid`, `refund_amount`) | `DECIMAL(10,2)` | exact decimal maths. `FLOAT` would store 0.1 as 0.1000000001 |
+| money (`consultation_fee`, `amount_paid`, `refund_amount`) | `DECIMAL(10,2)` | exact decimal math. `FLOAT` would store 0.1 as 0.1000000001 |
 | `appt_datetime`, `booked_on`, `cancelled_at` | `DATETIME` | keeps the clinic wall-clock time exactly as given. `TIMESTAMP` would convert it through the session time zone (see §4) |
 | `status` | `ENUM('BOOKED','CANCELLED')` | only two legal values, enforced by MySQL, in 1 byte |
 | `refund_percent` | `TINYINT UNSIGNED` | 0–100 fits in 1 byte |

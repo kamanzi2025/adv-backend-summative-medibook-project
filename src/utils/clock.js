@@ -1,7 +1,7 @@
 // The clinic clock. Everything in the app gets "now" and "today" from here.
 //
 // A "clinic Date" is a JS Date whose UTC fields hold the clinic's wall-clock time,
-// so 09:00 in Johannesburg is stored as 09:00Z. Doing all the date maths on the UTC
+// so 09:00 in Johannesburg is stored as 09:00Z. Doing all the date math on the UTC
 // fields means the result never depends on the time zone of my laptop, the MySQL
 // server or whatever machine runs the tests.
 //
