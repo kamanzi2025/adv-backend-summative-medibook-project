@@ -14,7 +14,7 @@ The same design is also in [`docs/schema.dbml`](docs/schema.dbml) (for dbdiagram
 
 ## Walkthrough video
 
-[Watch the walkthrough video (Google Drive)](https://drive.google.com/drive/folders/1yvDwgOVo46LXzWo8cpYIiliQwrjxVS3d?usp=sharing)
+[Watch the walkthrough video (YouTube)](https://youtu.be/nwxyxjGlfDw)
 
 ## Prerequisites
 
